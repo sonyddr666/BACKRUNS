@@ -271,6 +271,8 @@
             <div>Wire: <span id="mon-wire" style="color:#ff4444;">INATIVO</span></div>
             <div>Observador: <span id="mon-obs" style="color:#ff4444;">INATIVO</span></div>
             <div>Alarme: <span id="mon-alarme" style="color:#6b612c;">NORMAL</span></div>
+            <div>Colapso: <span id="mon-colapso" style="color:#ff6b6b;">0%</span> | Parado: <span id="mon-parado" style="color:#8a8a5a;">0.0s</span></div>
+            <div>Forçado: <span id="mon-forcado" style="color:#ff4444;">NÃO</span></div>
             <div>Móveis: <span id="mon-moveis" style="color:#8a8a5a;">0</span> | Walls: <span id="mon-walls" style="color:#8a8a5a;">0</span></div>
             <div>FPS: <span id="mon-fps" style="color:#66ff66;">--</span></div>
         </div>
@@ -392,6 +394,13 @@ let zonaDeFalha = [];      // meshes visuais das bordas
 // Alarme (2E)
 let faseAlarme = 'normal'; // 'normal' | 'amarelo' | 'vermelho'
 let deathActive = false;   // previne inputs durante death sequence
+
+// Colapso Dimensional (sistema de inatividade + morte aleatória)
+let tempoParado = 0;        // segundos sem se mover
+let colapsoProgress = 0;    // 0.0 → 1.0 (zoom progress)
+let colapsoForcado = false;  // quando true, é morte certa — não tem como escapar
+let colapsoTimerNext = 45 + Math.random() * 45; // próximo check de morte aleatória (45-90s)
+let colapsoGameTime = 0;    // tempo total de jogo acumulado
 
 const MAP_SIZE = 144;
 const WALL_HEIGHT = 4.0;
@@ -590,28 +599,58 @@ function criarMesa(x, z, rot) {
 function criarRelogio(x, y, z, faceRot) {
     const g = new THREE.Group();
 
-    // Face do relógio (cilindro achatado)
-    const matFace = new THREE.MeshStandardMaterial({ color: 0xeeeedd, roughness: 0.5 });
-    const face = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.03, 24), matFace);
-    face.rotation.x = Math.PI / 2;
+    // Face do relógio (canvas procedural com números)
+    const cvs = document.createElement('canvas'); cvs.width = 128; cvs.height = 128;
+    const ctx = cvs.getContext('2d');
+    ctx.fillStyle = '#e8e4d0'; ctx.beginPath(); ctx.arc(64, 64, 62, 0, Math.PI*2); ctx.fill();
+    // Números
+    ctx.fillStyle = '#222'; ctx.font = 'bold 14px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let h = 1; h <= 12; h++) {
+        const ang = (h / 12) * Math.PI * 2 - Math.PI / 2;
+        ctx.fillText(h.toString(), 64 + Math.cos(ang) * 48, 64 + Math.sin(ang) * 48);
+    }
+    // Marcas de minuto
+    ctx.strokeStyle = '#444'; ctx.lineWidth = 1;
+    for (let m = 0; m < 60; m++) {
+        const ang = (m / 60) * Math.PI * 2;
+        const r1 = m % 5 === 0 ? 54 : 58;
+        ctx.beginPath(); ctx.moveTo(64 + Math.cos(ang)*r1, 64 + Math.sin(ang)*r1);
+        ctx.lineTo(64 + Math.cos(ang)*62, 64 + Math.sin(ang)*62); ctx.stroke();
+    }
+    const texFace = new THREE.CanvasTexture(cvs);
+
+    const matFace = new THREE.MeshStandardMaterial({ map: texFace, roughness: 0.4, side: THREE.DoubleSide });
+    const face = new THREE.Mesh(new THREE.CircleGeometry(0.25, 32), matFace);
     g.add(face);
 
+    // Placa traseira (tampa s\u00f3lida atr\u00e1s)
+    const matBack = new THREE.MeshStandardMaterial({ color: 0x2a2a28, roughness: 0.8 });
+    const back = new THREE.Mesh(new THREE.CircleGeometry(0.25, 32), matBack);
+    back.position.z = -0.015;
+    back.rotation.y = Math.PI;
+    g.add(back);
+
     // Borda
-    const matBorda = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.4, metalness: 0.5 });
-    const borda = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.015, 8, 24), matBorda);
-    borda.rotation.x = Math.PI / 2;
+    const matBorda = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.3, metalness: 0.6 });
+    const borda = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.018, 8, 32), matBorda);
     g.add(borda);
 
-    // Ponteiros (hora e minuto)
+    // Ponteiros com pivot correto (pivotam da base)
     const matPont = new THREE.MeshBasicMaterial({ color: 0x111111 });
-    // Minuto
-    const minuto = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.2, 0.005), matPont);
-    minuto.position.set(0, 0.08, 0.02);
+
+    // Ponteiro de minuto (longo)
+    const minGeo = new THREE.BoxGeometry(0.012, 0.2, 0.008);
+    minGeo.translate(0, 0.1, 0); // move pivot pra base
+    const minuto = new THREE.Mesh(minGeo, matPont);
+    minuto.position.z = 0.02;
     minuto.rotation.z = Math.random() * Math.PI * 2;
     g.add(minuto);
-    // Hora
-    const hora = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.13, 0.005), matPont);
-    hora.position.set(0, 0.05, 0.025);
+
+    // Ponteiro de hora (curto e grosso)
+    const horaGeo = new THREE.BoxGeometry(0.018, 0.14, 0.008);
+    horaGeo.translate(0, 0.07, 0); // move pivot pra base
+    const hora = new THREE.Mesh(horaGeo, matPont);
+    hora.position.z = 0.025;
     hora.rotation.z = Math.random() * Math.PI * 2;
     g.add(hora);
 
@@ -2530,41 +2569,147 @@ function animate() {
             }
         }
 
+        // === SISTEMA DE COLAPSO DIMENSIONAL ===
+        // Detectar inatividade (reusar 'andando' do head bob acima)
+        if (andando) {
+            tempoParado = 0;
+            // Andar reverte o colapso (só se não for forçado)
+            if (!colapsoForcado) {
+                colapsoProgress = Math.max(0, colapsoProgress - delta * 0.4);
+            }
+        } else {
+            tempoParado += delta;
+        }
+
+        // Acumular tempo de jogo pra morte aleatória
+        colapsoGameTime += delta;
+
+        // Check de morte aleatória periódica (a cada 45-90s)
+        if (!colapsoForcado && colapsoGameTime >= colapsoTimerNext) {
+            // 15% de chance de ser selecionado pra morte
+            if (Math.random() < 0.15) {
+                colapsoForcado = true;
+                console.log('[AURA] COLAPSO DIMENSIONAL: jogador selecionado para morte');
+            }
+            colapsoTimerNext = colapsoGameTime + 45 + Math.random() * 45;
+        }
+
+        // Progresso do colapso
+        if (colapsoForcado) {
+            // Morte inevitável: progresso constante independente de mover
+            colapsoProgress = Math.min(1.0, colapsoProgress + delta * 0.12);
+        } else if (tempoParado > 4.0) {
+            // Parado > 4s: começa o colapso lento
+            colapsoProgress = Math.min(0.85, colapsoProgress + delta * 0.08);
+        }
+
         // === FASE 2B: SISTEMA DE STRESS GLOBAL ===
         // Decay natural
         stressLevel = Math.max(0, stressLevel - delta * 0.05);
 
-        // Tier 1 (0.3+): Tremor sutil via CSS (NUNCA tocar camera.rotation.z!)
-        if (stressLevel > 0.3) {
-            const tremAngle = Math.sin(time * 0.011) * stressLevel * 0.9; // graus
+        // Combinar stress + colapso pra efeitos visuais
+        const efeitoTotal = Math.max(stressLevel, colapsoProgress);
+
+        // Tier 1 (0.3+): Tremor sutil via CSS
+        if (efeitoTotal > 0.3) {
+            const tremAngle = Math.sin(time * 0.011) * efeitoTotal * 0.9;
             renderer.domElement.style.transform = `rotate(${tremAngle}deg)`;
         } else {
             renderer.domElement.style.transform = '';
         }
 
         // Tier 2 (0.6+): Neblina engole, VHS intensifica
-        if (stressLevel > 0.6) {
+        if (efeitoTotal > 0.6) {
             if (faseAlarme !== 'vermelho') {
-                scene.fog.density = 0.018 + (stressLevel - 0.6) * 0.04;
+                scene.fog.density = 0.018 + (efeitoTotal - 0.6) * 0.04;
             }
             document.getElementById('vhs-overlay').style.opacity =
-                String(0.6 + stressLevel * 0.4);
+                String(0.6 + efeitoTotal * 0.4);
         }
 
-        // Tier 3 (0.8+): FOV claustrofóbico, blackouts rápidos
-        if (stressLevel > 0.8) {
-            camera.fov = 75 - (stressLevel - 0.8) * 50;
+        // FOV baseado no colapso (clamp mínimo 20°, nunca inverte)
+        if (colapsoProgress > 0.1) {
+            camera.fov = Math.max(20, 75 - colapsoProgress * 55);
             camera.updateProjectionMatrix();
-            if (Math.random() > 0.92) {
-                document.getElementById('noclip-overlay').style.opacity = '0.7';
+            // Blackouts aleatórios
+            if (colapsoProgress > 0.5 && Math.random() > 0.92) {
+                document.getElementById('noclip-overlay').style.opacity = String(0.3 + colapsoProgress * 0.5);
                 setTimeout(() => {
-                    document.getElementById('noclip-overlay').style.opacity = '0';
-                }, 80);
+                    if (!colapsoForcado || colapsoProgress < 1.0)
+                        document.getElementById('noclip-overlay').style.opacity = '0';
+                }, 60 + colapsoProgress * 100);
             }
         }
 
-        // Reset câmera quando stress baixo
-        if (stressLevel < 0.1) {
+        // === COLAPSO COMPLETO: MORTE ===
+        if (colapsoProgress >= 1.0 && !deathActive) {
+            deathActive = true;
+
+            // Tela preta total
+            const noclipOv = document.getElementById('noclip-overlay');
+            noclipOv.style.transition = 'opacity 0.8s';
+            noclipOv.style.opacity = '1';
+
+            // Áudio de morte
+            if (oscillator && audioCtx) {
+                oscillator.frequency.setValueAtTime(8, audioCtx.currentTime);
+                if (gainNode) gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                if (biquadFilter) biquadFilter.frequency.setValueAtTime(40, audioCtx.currentTime);
+            }
+
+            // Texto de morte
+            const deathDiv = document.createElement('div');
+            deathDiv.id = 'death-colapso';
+            deathDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:999;pointer-events:none;';
+            deathDiv.innerHTML = '<div style="color:#8a0000;font-family:monospace;font-size:1.8rem;text-align:center;opacity:0;animation:fadeInDeath 1.5s 0.5s forwards;">COLAPSO DIMENSIONAL<br><span style="font-size:0.9rem;color:#555;">Você foi consumido pela estrutura.</span></div>';
+            document.body.appendChild(deathDiv);
+
+            // Adicionar animação CSS se não existir
+            if (!document.getElementById('colapso-style')) {
+                const st = document.createElement('style');
+                st.id = 'colapso-style';
+                st.textContent = '@keyframes fadeInDeath { from { opacity:0; transform:scale(0.8); } to { opacity:1; transform:scale(1); } }';
+                document.head.appendChild(st);
+            }
+
+            // Após 3.5s: reset total
+            setTimeout(() => {
+                // Reset colapso
+                colapsoProgress = 0;
+                colapsoForcado = false;
+                tempoParado = 0;
+                colapsoGameTime = 0;
+                colapsoTimerNext = 45 + Math.random() * 45;
+                stressLevel = 0;
+                deathActive = false;
+
+                // Reset visual
+                camera.fov = 75;
+                camera.updateProjectionMatrix();
+                renderer.domElement.style.transform = '';
+                noclipOv.style.transition = 'opacity 1.2s';
+                noclipOv.style.opacity = '0';
+                document.getElementById('vhs-overlay').style.opacity = document.getElementById('vhsSlider').value;
+                if (faseAlarme === 'normal') {
+                    scene.fog.density = parseFloat(document.getElementById('fogDensity').value);
+                    scene.fog.color.set('#2b2713'); scene.background.set('#2b2713');
+                }
+                if (gainNode && audioCtx) gainNode.gain.setValueAtTime(0.07, audioCtx.currentTime);
+                if (oscillator && audioCtx) oscillator.frequency.setValueAtTime(60, audioCtx.currentTime);
+                if (biquadFilter && audioCtx) biquadFilter.frequency.setValueAtTime(350, audioCtx.currentTime);
+
+                // Remover texto de morte
+                const dt = document.getElementById('death-colapso');
+                if (dt) dt.remove();
+
+                // Voltar pro menu
+                controls.unlock();
+                document.getElementById('menu-inicial').style.display = 'flex';
+            }, 3500);
+        }
+
+        // Reset câmera quando tudo calmo
+        if (stressLevel < 0.1 && colapsoProgress < 0.05) {
             renderer.domElement.style.transform = '';
             camera.fov = 75;
             camera.updateProjectionMatrix();
@@ -2604,6 +2749,20 @@ function animate() {
         if (monM) monM.innerText = moveisArray.length;
         if (monWa) monWa.innerText = wallBoxes.length;
         if (monF) monF.innerText = Math.round(1 / Math.max(delta, 0.001));
+
+        // Colapso monitor
+        const monCol = document.getElementById('mon-colapso');
+        const monPar = document.getElementById('mon-parado');
+        const monFor = document.getElementById('mon-forcado');
+        if (monCol) {
+            monCol.innerText = Math.round(colapsoProgress * 100) + '%';
+            monCol.style.color = colapsoProgress > 0.5 ? '#ff2222' : colapsoProgress > 0.1 ? '#ffaa00' : '#66ff66';
+        }
+        if (monPar) monPar.innerText = tempoParado.toFixed(1) + 's';
+        if (monFor) {
+            monFor.innerText = colapsoForcado ? 'MORTE CERTA' : 'NÃO';
+            monFor.style.color = colapsoForcado ? '#ff2222' : '#66ff66';
+        }
     }
 
     prevTime = time;
