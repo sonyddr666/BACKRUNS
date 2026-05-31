@@ -2121,7 +2121,7 @@ function init3D() {
 
     // === POOL DE LUZES (15 PointLights que teleportam pras mais próximas) ===
     for (let i = 0; i < 15; i++) {
-        const l = new THREE.PointLight(0xffffcc, baseLightIntensity, 18, 1.6);
+        const l = new THREE.PointLight(0xffffcc, baseLightIntensity, 8, 1.6);
         l.position.set(0, -10, 0);
         scene.add(l);
         poolDeLuzesReais.push({ light: l, assignedPanel: null });
@@ -2649,24 +2649,36 @@ function animate() {
         // ——— ILUMINAÇÃO: POOL DE 15 LUZES ———
         frameCount++;
         if (frameCount % 10 === 0) {
-            // Ordenar luminárias por distância ao jogador
-            todasAsLuminarias.sort((a, b) => {
+            // Filtrar luminárias do andar atual
+            const lumDoAndar = todasAsLuminarias.filter(l => {
+                const lumY = l.mesh.position.y;
+                return (andarAtual === 0 && lumY < FLOOR1_BASE) || (andarAtual === 1 && lumY >= FLOOR1_BASE);
+            });
+
+            // Ordenar por distância ao jogador
+            lumDoAndar.sort((a, b) => {
                 const dA = (a.x - camera.position.x) ** 2 + (a.z - camera.position.z) ** 2;
                 const dB = (b.x - camera.position.x) ** 2 + (b.z - camera.position.z) ** 2;
                 return dA - dB;
             });
 
             // Apagar luminárias distantes
-            for (let i = 15; i < todasAsLuminarias.length; i++) {
-                todasAsLuminarias[i].mesh.material.color.setHex(0x111111);
+            for (let i = 15; i < lumDoAndar.length; i++) {
+                lumDoAndar[i].mesh.material.color.setHex(0x111111);
             }
 
-            // Teleportar as 15 luzes reais pras mais próximas
-            for (let i = 0; i < 15 && i < todasAsLuminarias.length; i++) {
-                const lum = todasAsLuminarias[i];
+            // Teleportar as 15 luzes reais pras mais próximas do andar atual
+            const luzY = andarAtual === 0 ? 3.7 : (FLOOR1_BASE + 3.7);
+            for (let i = 0; i < 15; i++) {
                 const realLight = poolDeLuzesReais[i];
-                realLight.light.position.set(lum.x, 3.7, lum.z);
-                realLight.assignedPanel = lum;
+                if (i < lumDoAndar.length) {
+                    const lum = lumDoAndar[i];
+                    realLight.light.position.set(lum.x, luzY, lum.z);
+                    realLight.assignedPanel = lum;
+                } else {
+                    realLight.light.position.set(0, -20, 0);
+                    realLight.assignedPanel = null;
+                }
             }
         }
 
