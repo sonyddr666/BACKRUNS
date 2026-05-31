@@ -1892,6 +1892,13 @@ function reconstruirMundo() {
                         const darkMat = matPortaEscuraBase.clone();
                         const dm = add(geoDoorH, darkMat, wx, DOOR_HEIGHT / 2, wz);
                         portasEscuras.push({ x: wx, z: wz, mesh: dm });
+                    } else if (Math.random() < 0.70) {
+                        // 70% das entradas normais: porta marrom
+                        const doorMat = matPortaEscuraBase.clone();
+                        doorMat.color.setHex(0x3a2a1a);
+                        doorMat.emissive.setHex(0x000000);
+                        const dm = add(geoDoorH, doorMat, wx, DOOR_HEIGHT / 2, wz);
+                        portasEscuras.push({ x: wx, z: wz, mesh: dm, normalDoor: true });
                     }
                 }
                 // else: passagem aberta, sem geometria
@@ -1935,6 +1942,13 @@ function reconstruirMundo() {
                         const darkMat = matPortaEscuraBase.clone();
                         const dm = add(geoDoorV, darkMat, wx, DOOR_HEIGHT / 2, wz, Math.PI / 2);
                         portasEscuras.push({ x: wx, z: wz, mesh: dm });
+                    } else if (Math.random() < 0.70) {
+                        // 70% das entradas normais: porta marrom
+                        const doorMat = matPortaEscuraBase.clone();
+                        doorMat.color.setHex(0x3a2a1a);
+                        doorMat.emissive.setHex(0x000000);
+                        const dm = add(geoDoorV, doorMat, wx, DOOR_HEIGHT / 2, wz, Math.PI / 2);
+                        portasEscuras.push({ x: wx, z: wz, mesh: dm, normalDoor: true });
                     }
                 }
             }
@@ -2060,6 +2074,12 @@ function reconstruirMundo() {
                         const darkMat = matPortaEscuraBase.clone();
                         const dm = add(geoDoorH, darkMat, wx, yOff + DOOR_HEIGHT / 2, wz);
                         portasEscuras.push({ x: wx, z: wz, mesh: dm });
+                    } else if (Math.random() < 0.70) {
+                        const doorMat = matPortaEscuraBase.clone();
+                        doorMat.color.setHex(0x3a2a1a);
+                        doorMat.emissive.setHex(0x000000);
+                        const dm = add(geoDoorH, doorMat, wx, yOff + DOOR_HEIGHT / 2, wz);
+                        portasEscuras.push({ x: wx, z: wz, mesh: dm, normalDoor: true });
                     }
                 }
             }
@@ -2101,6 +2121,12 @@ function reconstruirMundo() {
                         const darkMat = matPortaEscuraBase.clone();
                         const dm = add(geoDoorV, darkMat, wx, yOff + DOOR_HEIGHT / 2, wz, Math.PI / 2);
                         portasEscuras.push({ x: wx, z: wz, mesh: dm });
+                    } else if (Math.random() < 0.70) {
+                        const doorMat = matPortaEscuraBase.clone();
+                        doorMat.color.setHex(0x3a2a1a);
+                        doorMat.emissive.setHex(0x000000);
+                        const dm = add(geoDoorV, doorMat, wx, yOff + DOOR_HEIGHT / 2, wz, Math.PI / 2);
+                        portasEscuras.push({ x: wx, z: wz, mesh: dm, normalDoor: true });
                     }
                 }
             }
@@ -2148,14 +2174,12 @@ function reconstruirMundo() {
 
     // === PORTAS MARRONS + MAÇANETA + ABERTURA INTERATIVA ===
     const matPortaMarrom = new THREE.MeshStandardMaterial({
-        color: 0x3a2a1a, roughness: 0.7, metalness: 0.1,
-        side: THREE.DoubleSide
+        color: 0x3a2a1a, roughness: 0.7, metalness: 0.1
     });
     const matMacaneta = new THREE.MeshStandardMaterial({
         color: 0x8a7a50, roughness: 0.3, metalness: 0.7
     });
     const geoMacanetaBola = new THREE.SphereGeometry(0.05, 8, 6);
-    const geoMacanetaHaste = new THREE.CylinderGeometry(0.015, 0.015, 0.1, 6);
     const geoFrameTop = new THREE.BoxGeometry(DOOR_WIDTH + 0.12, 0.12, 0.12);
 
     portasInterativas = []; // reset
@@ -2167,78 +2191,81 @@ function reconstruirMundo() {
 
         const doorPos = pd.mesh.position.clone();
         const doorRot = pd.mesh.rotation.y || 0;
-        const isVertical = Math.abs(doorRot) > 0.5; // porta no eixo Z
+        const isVertical = Math.abs(doorRot) > 0.5;
 
-        // === CABEÇALHO DO BATENTE (barra escura em cima conectando os postes) ===
+        // === CABEÇALHO DO BATENTE ===
         const frameTop = new THREE.Mesh(geoFrameTop, matFrame);
         frameTop.position.set(doorPos.x, doorPos.y + DOOR_HEIGHT / 2, doorPos.z);
         frameTop.rotation.y = doorRot;
         scene.add(frameTop);
         objetosDinamicos.push(frameTop);
 
-        // === MAÇANETA (altura real: ~1m do chão) ===
-        const knobY = doorPos.y - (DOOR_HEIGHT / 2) + 1.0; // 1m acima do chão
-        const knobSideOffset = DOOR_WIDTH / 2 - 0.2; // perto da borda
+        // === CRIAR GRUPO DA PORTA (porta + maçanetas juntos) ===
+        const doorGroup = new THREE.Group();
+        doorGroup.position.copy(doorPos);
+        doorGroup.rotation.y = doorRot;
 
-        // Calcular offsets baseado na rotação da porta
-        const knobLocalX = isVertical ? 0 : knobSideOffset;
-        const knobLocalZ = isVertical ? knobSideOffset : 0;
-        const normalX = isVertical ? 0.06 : 0;
-        const normalZ = isVertical ? 0 : 0.06;
+        // Remover mesh da scene e adicionar ao grupo na posição local (0,0,0)
+        scene.remove(pd.mesh);
+        pd.mesh.position.set(0, 0, 0);
+        pd.mesh.rotation.y = 0; // rotação fica no grupo
+        doorGroup.add(pd.mesh);
+
+        // === MAÇANETA (local space, 1m do chão) ===
+        const knobLocalY = -(DOOR_HEIGHT / 2) + 1.0; // 1m acima do chão, relativo ao centro
+        const knobLocalX = DOOR_WIDTH / 2 - 0.2;      // perto da borda direita
 
         // Frente
         const bola1 = new THREE.Mesh(geoMacanetaBola, matMacaneta);
-        bola1.position.set(doorPos.x + knobLocalX + normalX, knobY, doorPos.z + knobLocalZ + normalZ);
-        scene.add(bola1); objetosDinamicos.push(bola1);
+        bola1.position.set(knobLocalX, knobLocalY, 0.05);
+        doorGroup.add(bola1);
 
         // Trás
         const bola2 = new THREE.Mesh(geoMacanetaBola, matMacaneta);
-        bola2.position.set(doorPos.x + knobLocalX - normalX, knobY, doorPos.z + knobLocalZ - normalZ);
-        scene.add(bola2); objetosDinamicos.push(bola2);
+        bola2.position.set(knobLocalX, knobLocalY, -0.05);
+        doorGroup.add(bola2);
 
-        // === PORTAS ANOMALIA: 30% chance de ter 3-5 maçanetas extras em posições estranhas ===
+        // === PORTAS ANOMALIA: 30% chance de 3-5 maçanetas extras estranhas ===
         if (Math.random() < 0.3) {
-            const extraCount = 3 + Math.floor(Math.random() * 3); // 3-5
+            const extraCount = 3 + Math.floor(Math.random() * 3);
             for (let e = 0; e < extraCount; e++) {
-                const ex = doorPos.x + (Math.random() - 0.5) * (DOOR_WIDTH - 0.3);
-                const ey = doorPos.y - DOOR_HEIGHT / 2 + 0.3 + Math.random() * (DOOR_HEIGHT - 0.6);
-                const ez = doorPos.z + (Math.random() - 0.5) * 0.15;
                 const extraBola = new THREE.Mesh(geoMacanetaBola, matMacaneta);
-                extraBola.position.set(ex, ey, ez);
+                extraBola.position.set(
+                    (Math.random() - 0.5) * (DOOR_WIDTH - 0.3),
+                    -(DOOR_HEIGHT / 2) + 0.3 + Math.random() * (DOOR_HEIGHT - 0.6),
+                    (Math.random() - 0.5) * 0.15
+                );
                 extraBola.scale.setScalar(0.6 + Math.random() * 0.8);
-                scene.add(extraBola); objetosDinamicos.push(extraBola);
+                doorGroup.add(extraBola);
             }
         }
 
-        // === PORTA INTERATIVA: 70% abrem/fecham, 20% dessas são trancadas ===
+        // === PORTA INTERATIVA: 70% abrem/fecham ===
         const interativa = Math.random() < 0.7;
         const trancada = interativa && Math.random() < 0.2;
 
         if (interativa) {
-            // Criar grupo pivot (dobradiça) pra rotação
+            // Pivot na borda esquerda (dobradiça)
             const pivot = new THREE.Group();
-            // Pivot na borda esquerda da porta
-            if (isVertical) {
-                pivot.position.set(doorPos.x, doorPos.y, doorPos.z - DOOR_WIDTH / 2);
-            } else {
-                pivot.position.set(doorPos.x - DOOR_WIDTH / 2, doorPos.y, doorPos.z);
-            }
+            pivot.position.copy(doorPos);
+            pivot.rotation.y = doorRot;
             scene.add(pivot);
             objetosDinamicos.push(pivot);
 
-            // Reparentar a porta pro pivot
-            scene.remove(pd.mesh);
-            pd.mesh.position.set(0, 0, 0);
-            if (isVertical) {
-                pd.mesh.position.z = DOOR_WIDTH / 2;
-            } else {
-                pd.mesh.position.x = DOOR_WIDTH / 2;
-            }
-            pivot.add(pd.mesh);
+            // Mover doorGroup pra espaço local do pivot
+            doorGroup.position.set(0, 0, 0);
+            doorGroup.rotation.y = 0;
+            // Deslocar pro lado (porta gira pela borda esquerda)
+            doorGroup.position.x = DOOR_WIDTH / 2;
+            pivot.position.x -= Math.cos(doorRot) * (DOOR_WIDTH / 2);
+            pivot.position.z += Math.sin(doorRot) * (DOOR_WIDTH / 2);
+
+            pivot.add(doorGroup);
 
             portasInterativas.push({
                 pivot: pivot,
-                x: doorPos.x,  // Centro da porta (não a dobradiça)
+                doorGroup: doorGroup,
+                x: doorPos.x,
                 y: doorPos.y,
                 z: doorPos.z,
                 aberta: false,
@@ -2247,9 +2274,16 @@ function reconstruirMundo() {
                 trancada: trancada,
                 isVertical: isVertical
             });
+        } else {
+            // Porta fixa — adicionar à scene
+            scene.add(doorGroup);
+            objetosDinamicos.push(doorGroup);
+
+            // Colisão pra portas fixas
+            const bbox = new THREE.Box3().setFromObject(doorGroup);
+            wallBoxes.push({ box: bbox, x: doorPos.x, z: doorPos.z });
         }
 
-        // Portas marrons NÃO teleportam
         pd.teleportaAndar = false;
     }
 
