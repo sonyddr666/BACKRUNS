@@ -43,9 +43,13 @@
             flex-direction:column; z-index:100;
         }
         .fullscreen-menu h1 {
-            text-transform:uppercase; letter-spacing:4px; font-weight:bold;
-            font-size:clamp(1.5rem,5vw,2.8rem); margin-bottom:30px; color:#d1c78b;
-            text-shadow:0 0 20px rgba(209,199,139,0.4); text-align:center;
+            text-transform:uppercase; letter-spacing:8px; font-weight:bold;
+            font-size:clamp(2rem,6vw,3.5rem); margin-bottom:4px; color:#d1c78b;
+            text-shadow:0 0 30px rgba(209,199,139,0.4); text-align:center;
+        }
+        .fullscreen-menu .subtitle {
+            font-size:clamp(0.8rem,2vw,1.1rem); color:#6b612c; letter-spacing:6px;
+            text-transform:uppercase; margin-bottom:25px;
         }
         .botoes-iniciais { display:flex; gap:20px; flex-wrap:wrap; justify-content:center; }
 
@@ -55,6 +59,35 @@
             text-transform:uppercase; transition:all 0.2s; font-family:monospace;
         }
         button:hover { background:#d1c78b; color:#2b2713; box-shadow:0 0 15px rgba(209,199,139,0.5); }
+
+        /* Abas do Dev Panel */
+        .dev-tabs { display:flex; gap:2px; margin-bottom:10px; }
+        .dev-tab {
+            flex:1; padding:6px 4px; font-size:0.6rem; text-align:center;
+            background:#1a1808; border:1px solid #3a3415; color:#8a8a5a;
+            cursor:pointer; transition:all 0.15s; font-family:monospace;
+            text-transform:uppercase; letter-spacing:1px;
+        }
+        .dev-tab:hover { background:#2a2510; color:#d1c78b; }
+        .dev-tab.active { background:#3a3415; color:#d1c78b; border-color:#d1c78b; }
+        .dev-tab-content { display:none; }
+        .dev-tab-content.active { display:block; }
+
+        /* Hotbar de Spawn */
+        #hotbar-spawn {
+            display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+            z-index:200; background:rgba(12,12,10,0.92); border:1px solid #544d21;
+            padding:6px 10px; border-radius:4px; box-shadow:0 0 20px rgba(0,0,0,0.8);
+        }
+        #hotbar-spawn .hb-items { display:flex; gap:4px; }
+        .hb-slot {
+            width:48px; height:48px; display:flex; flex-direction:column;
+            align-items:center; justify-content:center; cursor:pointer;
+            background:rgba(30,28,18,0.9); border:1px solid #3a3415;
+            transition:all 0.15s; font-size:1.2rem; position:relative;
+        }
+        .hb-slot:hover { border-color:#d1c78b; background:#2a2510; box-shadow:0 0 8px rgba(209,199,139,0.3); }
+        .hb-slot span { font-size:0.45rem; color:#8a8a5a; margin-top:2px; }
 
         #painel-dev {
             display:none; position:absolute; top:10px; right:10px; width:310px;
@@ -105,11 +138,12 @@
 <div id="noclip-overlay" style="position:absolute; top:0; left:0; width:100%; height:100%; background:#000; opacity:0; transition:opacity 0.4s; pointer-events:none; z-index:50;"></div>
 
 <div id="menu-inicial" class="fullscreen-menu">
-    <h1>O Colapso Estético</h1>
-    <p style="color:#6b612c; margin-bottom:20px; font-size:0.75rem; text-align:center; max-width:85%;">ÁREA: ~600.000.000 MI² · CLASSE 2 · ENTIDADES: CONFIRMADAS</p>
+    <h1>BACKROOMS</h1>
+    <div class="subtitle">Level 0</div>
+    <p style="color:#6b612c; margin-bottom:25px; font-size:0.7rem; text-align:center; max-width:85%; letter-spacing:2px;">ÁREA: ~600.000.000 MI² · CLASSE 2 · ENTIDADES: CONFIRMADAS</p>
     <div class="botoes-iniciais">
-        <button id="btn-jogar">Entrar no Lobby</button>
-        <button id="btn-dev">Aura Engine</button>
+        <button id="btn-jogar">JOGAR</button>
+        <button id="btn-dev">MODO DEV</button>
     </div>
 </div>
 
@@ -122,164 +156,191 @@
 </div>
 
 <div id="painel-dev" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onmouseup="event.stopPropagation()">
-    <h2>AURA ENGINE v5.0</h2>
+    <h2 style="margin-top:0; color:#d1c78b; text-align:center; border-bottom:1px solid #544d21; padding-bottom:6px; font-size:0.9rem; margin-bottom:8px;">AURA ENGINE v6.0</h2>
 
-    <div class="dev-section">
-        <span class="dev-section-title">▸ GEOMETRIA DO LABIRINTO</span>
-        <div class="dev-group">
-            <label>Tamanho da Célula (m) <span id="v-cell">12</span></label>
-            <input type="range" id="cellSize" min="8" max="24" step="2" value="12"
-                oninput="document.getElementById('v-cell').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label>Abertura Extra (menos paredes) <span id="v-open">0.18</span></label>
-            <input type="range" id="extraOpen" min="0" max="0.5" step="0.02" value="0.18"
-                oninput="document.getElementById('v-open').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label>Chance de Porta <span id="v-door">0.25</span></label>
-            <input type="range" id="doorChance" min="0" max="0.8" step="0.05" value="0.25"
-                oninput="document.getElementById('v-door').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label>Portas Escuras <span id="v-dark">0.04</span></label>
-            <input type="range" id="darkDoorChance" min="0" max="0.2" step="0.01" value="0.04"
-                oninput="document.getElementById('v-dark').innerText=this.value">
-        </div>
-        <button class="btn-dev" id="btn-rebuild" style="background:#4a4118; border-color:#a09040;">⟳ RECONSTRUIR MUNDO</button>
+    <div class="dev-tabs">
+        <div class="dev-tab active" onclick="switchDevTab('mundo')">🏗️ MUNDO</div>
+        <div class="dev-tab" onclick="switchDevTab('obj')">🪑 OBJ</div>
+        <div class="dev-tab" onclick="switchDevTab('ents')">👾 ENTS</div>
+        <div class="dev-tab" onclick="switchDevTab('mon')">📊 MON</div>
     </div>
 
-    <div class="dev-section">
-        <span class="dev-section-title">▸ FILTROS VISUAIS</span>
-        <div class="dev-group"><label>Cor Teto:</label><input type="color" id="corTeto" value="#ffffff"></div>
-        <div class="dev-group"><label>Cor Parede:</label><input type="color" id="corParede" value="#ffffff"></div>
-        <div class="dev-group"><label>Cor Chão:</label><input type="color" id="corChao" value="#ffffff"></div>
-        <div class="dev-group"><label>Cor Neblina:</label><input type="color" id="fogColor" value="#2b2713"></div>
-    </div>
-
-    <div class="dev-section">
-        <span class="dev-section-title">▸ ILUMINAÇÃO E ATMOSFERA</span>
-        <div class="dev-group">
-            <label>Neblina <span id="v-fog">0.018</span></label>
-            <input type="range" id="fogDensity" min="0" max="0.08" step="0.001" value="0.018"
-                oninput="document.getElementById('v-fog').innerText=this.value">
+    <!-- ABA: MUNDO -->
+    <div id="tab-mundo" class="dev-tab-content active">
+        <div class="dev-section">
+            <span class="dev-section-title">▸ GEOMETRIA</span>
+            <div class="dev-group">
+                <label>Célula <span id="v-cell">12</span>m</label>
+                <input type="range" id="cellSize" min="8" max="24" step="2" value="12"
+                    oninput="document.getElementById('v-cell').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>Abertura <span id="v-open">0.18</span></label>
+                <input type="range" id="extraOpen" min="0" max="0.5" step="0.02" value="0.18"
+                    oninput="document.getElementById('v-open').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>Portas <span id="v-door">0.25</span></label>
+                <input type="range" id="doorChance" min="0" max="0.8" step="0.05" value="0.25"
+                    oninput="document.getElementById('v-door').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>P. Escuras <span id="v-dark">0.04</span></label>
+                <input type="range" id="darkDoorChance" min="0" max="0.2" step="0.01" value="0.04"
+                    oninput="document.getElementById('v-dark').innerText=this.value">
+            </div>
+            <button class="btn-dev" id="btn-rebuild" style="background:#4a4118; border-color:#a09040; font-size:0.65rem; padding:5px;">⟳ RECONSTRUIR</button>
         </div>
-        <div class="dev-group">
-            <label>Luz Ambiente <span id="v-amb">0.2</span></label>
-            <input type="range" id="luzAmb" min="0" max="2" step="0.1" value="0.2"
-                oninput="document.getElementById('v-amb').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label>Luminárias <span id="v-lum">1.0</span></label>
-            <input type="range" id="luzLum" min="0" max="3" step="0.1" value="1.0"
-                oninput="document.getElementById('v-lum').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label>VHS <span id="v-vhs">0.6</span></label>
-            <input type="range" id="vhsSlider" min="0" max="1" step="0.1" value="0.6"
-                oninput="document.getElementById('v-vhs').innerText=this.value">
-        </div>
-    </div>
-
-    <div class="dev-section">
-        <span class="dev-section-title">▸ OBJETOS E MOBILIÁRIO</span>
-        <div class="dev-group">
-            <label>Cadeiras (% salas) <span id="v-cadeiras">60</span>%</label>
-            <input type="range" id="chCadeiras" min="0" max="100" step="5" value="60"
-                oninput="document.getElementById('v-cadeiras').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label>Sofás (% salas ≥2x2) <span id="v-sofas">40</span>%</label>
-            <input type="range" id="chSofas" min="0" max="100" step="5" value="40"
-                oninput="document.getElementById('v-sofas').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label>Mesas (% corredores) <span id="v-divisorias">15</span>%</label>
-            <input type="range" id="chDivisorias" min="0" max="50" step="5" value="15"
-                oninput="document.getElementById('v-divisorias').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label>Cadeira Gigante (% salas 3x3) <span id="v-gigante">5</span>%</label>
-            <input type="range" id="chGigante" min="0" max="30" step="1" value="5"
-                oninput="document.getElementById('v-gigante').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label>Projetores <span id="v-proj">2</span></label>
-            <input type="range" id="chProjetores" min="0" max="6" step="1" value="2"
-                oninput="document.getElementById('v-proj').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label><input type="checkbox" id="chZonaFalha" checked> Zonas de Falha (bordas)</label>
+        <div class="dev-section">
+            <span class="dev-section-title">▸ VISUAL</span>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <div class="dev-group" style="flex:1"><label>Teto</label><input type="color" id="corTeto" value="#ffffff"></div>
+                <div class="dev-group" style="flex:1"><label>Parede</label><input type="color" id="corParede" value="#ffffff"></div>
+                <div class="dev-group" style="flex:1"><label>Chão</label><input type="color" id="corChao" value="#ffffff"></div>
+                <div class="dev-group" style="flex:1"><label>Fog</label><input type="color" id="fogColor" value="#2b2713"></div>
+            </div>
+            <div class="dev-group">
+                <label>Neblina <span id="v-fog">0.018</span></label>
+                <input type="range" id="fogDensity" min="0" max="0.08" step="0.001" value="0.018"
+                    oninput="document.getElementById('v-fog').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>Luz Amb <span id="v-amb">0.2</span></label>
+                <input type="range" id="luzAmb" min="0" max="2" step="0.1" value="0.2"
+                    oninput="document.getElementById('v-amb').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>Luminárias <span id="v-lum">1.0</span></label>
+                <input type="range" id="luzLum" min="0" max="3" step="0.1" value="1.0"
+                    oninput="document.getElementById('v-lum').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>VHS <span id="v-vhs">0.6</span></label>
+                <input type="range" id="vhsSlider" min="0" max="1" step="0.1" value="0.6"
+                    oninput="document.getElementById('v-vhs').innerText=this.value">
+            </div>
         </div>
     </div>
 
-    <div class="dev-section">
-        <span class="dev-section-title" style="color:#ff6b6b;">▸ ANOMALIAS DIMENSIONAIS</span>
-        <div class="dev-group">
-            <label>Cadeiras no Teto <span id="v-anomTeto">8</span>%</label>
-            <input type="range" id="chAnomTeto" min="0" max="40" step="2" value="8"
-                oninput="document.getElementById('v-anomTeto').innerText=this.value">
+    <!-- ABA: OBJETOS -->
+    <div id="tab-obj" class="dev-tab-content">
+        <div class="dev-section">
+            <span class="dev-section-title">▸ MOBILIÁRIO</span>
+            <div class="dev-group">
+                <label>Cadeiras <span id="v-cadeiras">60</span>%</label>
+                <input type="range" id="chCadeiras" min="0" max="500" step="10" value="60"
+                    oninput="document.getElementById('v-cadeiras').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>Sofás <span id="v-sofas">40</span>%</label>
+                <input type="range" id="chSofas" min="0" max="500" step="10" value="40"
+                    oninput="document.getElementById('v-sofas').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>Mesas <span id="v-divisorias">15</span>%</label>
+                <input type="range" id="chDivisorias" min="0" max="500" step="10" value="15"
+                    oninput="document.getElementById('v-divisorias').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>Cad. Gigante <span id="v-gigante">5</span>%</label>
+                <input type="range" id="chGigante" min="0" max="100" step="1" value="5"
+                    oninput="document.getElementById('v-gigante').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>Projetores <span id="v-proj">2</span></label>
+                <input type="range" id="chProjetores" min="0" max="10" step="1" value="2"
+                    oninput="document.getElementById('v-proj').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label><input type="checkbox" id="chZonaFalha" checked> Zonas de Falha</label>
+            </div>
         </div>
-        <div class="dev-group">
-            <label>Objetos Flutuando <span id="v-anomFlut">5</span>%</label>
-            <input type="range" id="chAnomFlut" min="0" max="30" step="1" value="5"
-                oninput="document.getElementById('v-anomFlut').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label>Objetos na Parede <span id="v-anomParede">6</span>%</label>
-            <input type="range" id="chAnomParede" min="0" max="30" step="2" value="6"
-                oninput="document.getElementById('v-anomParede').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label>Relógios Retorcidos <span id="v-anomRelogio">4</span>%</label>
-            <input type="range" id="chAnomRelogio" min="0" max="20" step="1" value="4"
-                oninput="document.getElementById('v-anomRelogio').innerText=this.value">
-        </div>
-    </div>
-
-    <div class="dev-section">
-        <span class="dev-section-title">▸ ENTIDADES E DEBUG</span>
-        <div class="dev-group">
-            <label><input type="checkbox" id="chWire" checked> The Wire (perseguidor)</label>
-        </div>
-        <div class="dev-group">
-            <label>Wire Speed <span id="v-wspd">1.0</span></label>
-            <input type="range" id="wireSpeed" min="0.3" max="3" step="0.1" value="1.0"
-                oninput="document.getElementById('v-wspd').innerText=this.value">
-        </div>
-        <div class="dev-group">
-            <label><input type="checkbox" id="chObservador" checked> O Observador</label>
-        </div>
-        <div class="dev-group">
-            <label>Taxa CO2 <span id="v-co2rate">1</span>x</label>
-            <input type="range" id="co2Rate" min="0" max="10" step="0.5" value="1"
-                oninput="document.getElementById('v-co2rate').innerText=this.value">
-        </div>
-        <div class="dev-group" style="display:flex; gap:4px; flex-wrap:wrap;">
-            <button class="btn-dev" id="btn-spawnWire" style="font-size:0.55rem; padding:3px 6px;">⚡ SPAWN WIRE</button>
-            <button class="btn-dev" id="btn-spawnObs" style="font-size:0.55rem; padding:3px 6px;">👁 SPAWN OBS</button>
-            <button class="btn-dev" id="btn-resetStress" style="font-size:0.55rem; padding:3px 6px;">💆 RESET STRESS</button>
-            <button class="btn-dev" id="btn-resetCo2" style="font-size:0.55rem; padding:3px 6px;">🌬 RESET CO2</button>
-        </div>
-    </div>
-
-    <div class="dev-section">
-        <span class="dev-section-title">▸ MONITOR AO VIVO</span>
-        <div style="font-size:0.6rem; color:#8a8a5a; line-height:1.6;">
-            <div>Stress: <span id="mon-stress" style="color:#ffaa00;">0.00</span></div>
-            <div>CO2: <span id="mon-co2" style="color:#ffaa00;">0.0410</span></div>
-            <div>Wire: <span id="mon-wire" style="color:#ff4444;">INATIVO</span></div>
-            <div>Observador: <span id="mon-obs" style="color:#ff4444;">INATIVO</span></div>
-            <div>Alarme: <span id="mon-alarme" style="color:#6b612c;">NORMAL</span></div>
-            <div>Colapso: <span id="mon-colapso" style="color:#ff6b6b;">0%</span> | Parado: <span id="mon-parado" style="color:#8a8a5a;">0.0s</span></div>
-            <div>Forçado: <span id="mon-forcado" style="color:#ff4444;">NÃO</span></div>
-            <div>Móveis: <span id="mon-moveis" style="color:#8a8a5a;">0</span> | Walls: <span id="mon-walls" style="color:#8a8a5a;">0</span></div>
-            <div>FPS: <span id="mon-fps" style="color:#66ff66;">--</span></div>
+        <div class="dev-section">
+            <span class="dev-section-title" style="color:#ff6b6b;">▸ ANOMALIAS</span>
+            <div class="dev-group">
+                <label>Teto <span id="v-anomTeto">8</span>%</label>
+                <input type="range" id="chAnomTeto" min="0" max="100" step="2" value="8"
+                    oninput="document.getElementById('v-anomTeto').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>Flutuando <span id="v-anomFlut">5</span>%</label>
+                <input type="range" id="chAnomFlut" min="0" max="100" step="1" value="5"
+                    oninput="document.getElementById('v-anomFlut').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>Parede <span id="v-anomParede">6</span>%</label>
+                <input type="range" id="chAnomParede" min="0" max="100" step="2" value="6"
+                    oninput="document.getElementById('v-anomParede').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label>Relógios <span id="v-anomRelogio">4</span>%</label>
+                <input type="range" id="chAnomRelogio" min="0" max="100" step="1" value="4"
+                    oninput="document.getElementById('v-anomRelogio').innerText=this.value">
+            </div>
         </div>
     </div>
 
-    <button class="btn-dev" id="btn-testar" style="background:#d1c78b; color:#000; border-color:#fff; margin-top:8px;">▶ TESTAR LABIRINTO</button>
-    <p style="font-size:0.6rem; text-align:center; color:#555; margin-top:8px;">ESC = liberar mouse</p>
+    <!-- ABA: ENTIDADES -->
+    <div id="tab-ents" class="dev-tab-content">
+        <div class="dev-section">
+            <span class="dev-section-title">▸ ENTIDADES</span>
+            <div class="dev-group">
+                <label><input type="checkbox" id="chWire" checked> The Wire</label>
+            </div>
+            <div class="dev-group">
+                <label>Speed <span id="v-wspd">1.0</span></label>
+                <input type="range" id="wireSpeed" min="0.3" max="3" step="0.1" value="1.0"
+                    oninput="document.getElementById('v-wspd').innerText=this.value">
+            </div>
+            <div class="dev-group">
+                <label><input type="checkbox" id="chObservador" checked> Observador</label>
+            </div>
+            <div class="dev-group">
+                <label>CO2 <span id="v-co2rate">1</span>x</label>
+                <input type="range" id="co2Rate" min="0" max="10" step="0.5" value="1"
+                    oninput="document.getElementById('v-co2rate').innerText=this.value">
+            </div>
+        </div>
+        <p style="font-size:0.55rem; color:#6b612c; text-align:center;">TAB = abrir hotbar de spawn</p>
+    </div>
+
+    <!-- ABA: MONITOR -->
+    <div id="tab-mon" class="dev-tab-content">
+        <div class="dev-section">
+            <span class="dev-section-title">▸ MONITOR AO VIVO</span>
+            <div style="font-size:0.6rem; color:#8a8a5a; line-height:1.8;">
+                <div>Stress: <span id="mon-stress" style="color:#ffaa00;">0.00</span></div>
+                <div>CO2: <span id="mon-co2" style="color:#ffaa00;">0.0410</span></div>
+                <div>Wire: <span id="mon-wire" style="color:#ff4444;">INATIVO</span></div>
+                <div>Observador: <span id="mon-obs" style="color:#ff4444;">INATIVO</span></div>
+                <div>Alarme: <span id="mon-alarme" style="color:#6b612c;">NORMAL</span></div>
+                <div>Colapso: <span id="mon-colapso" style="color:#ff6b6b;">0%</span> | Parado: <span id="mon-parado" style="color:#8a8a5a;">0.0s</span></div>
+                <div>Forçado: <span id="mon-forcado" style="color:#ff4444;">NÃO</span></div>
+                <div>Móveis: <span id="mon-moveis" style="color:#8a8a5a;">0</span> | Walls: <span id="mon-walls" style="color:#8a8a5a;">0</span></div>
+                <div>FPS: <span id="mon-fps" style="color:#66ff66;">--</span></div>
+            </div>
+        </div>
+        <button class="btn-dev" id="btn-testar" style="background:#d1c78b; color:#000; border-color:#fff; font-size:0.7rem; padding:8px;">▶ TESTAR LABIRINTO</button>
+    </div>
+
+    <p style="font-size:0.5rem; text-align:center; color:#555; margin-top:6px; margin-bottom:0;">ESC = mouse · TAB = hotbar</p>
+</div>
+
+<!-- HOTBAR DE SPAWN (estilo Minecraft) -->
+<div id="hotbar-spawn">
+    <div class="hb-items">
+        <div class="hb-slot" onclick="hotbarSpawn('cadeira')" title="Cadeira">🪑<span>Cad</span></div>
+        <div class="hb-slot" onclick="hotbarSpawn('sofa')" title="Sofá">🛋️<span>Sofá</span></div>
+        <div class="hb-slot" onclick="hotbarSpawn('mesa')" title="Mesa">🗄️<span>Mesa</span></div>
+        <div class="hb-slot" onclick="hotbarSpawn('relogio')" title="Relógio">🕐<span>Relg</span></div>
+        <div class="hb-slot" onclick="hotbarSpawn('bebedouro')" title="Bebedouro">🚰<span>Beb</span></div>
+        <div class="hb-slot" onclick="hotbarSpawn('arquivo')" title="Armário">📦<span>Arq</span></div>
+        <div class="hb-slot" onclick="hotbarSpawn('quadro')" title="Quadro">🖼️<span>Quad</span></div>
+        <div class="hb-slot" onclick="hotbarSpawn('wire')" title="Spawn Wire" style="border-color:#ff4444;">⚡<span>Wire</span></div>
+        <div class="hb-slot" onclick="hotbarSpawn('observador')" title="Spawn Observador" style="border-color:#ff4444;">👁<span>Obs</span></div>
+        <div class="hb-slot" onclick="hotbarSpawn('resetStress')" title="Reset Stress" style="border-color:#66ff66;">💆<span>Str</span></div>
+        <div class="hb-slot" onclick="hotbarSpawn('resetCo2')" title="Reset CO2" style="border-color:#66ff66;">🌬<span>CO2</span></div>
+    </div>
 </div>
 
 <script>
@@ -792,20 +853,33 @@ function gerarMoveis(grid, rooms, rows, cols, cellSize) {
     }
 
     // Ler chances do painel dev (com fallback pros defaults)
-    const chCadeiras = (parseInt(document.getElementById('chCadeiras')?.value) || 60) / 100;
-    const chSofas = (parseInt(document.getElementById('chSofas')?.value) || 40) / 100;
-    const chDivisorias = (parseInt(document.getElementById('chDivisorias')?.value) || 15) / 100;
+    const rawCadeiras = parseInt(document.getElementById('chCadeiras')?.value) || 60;
+    const rawSofas = parseInt(document.getElementById('chSofas')?.value) || 40;
+    const rawDivisorias = parseInt(document.getElementById('chDivisorias')?.value) || 15;
     const chGigante = (parseInt(document.getElementById('chGigante')?.value) || 5) / 100;
     const maxProj = parseInt(document.getElementById('chProjetores')?.value) || 2;
     const zonaFalhaAtiva = document.getElementById('chZonaFalha')?.checked !== false;
 
+    // Performance cap
+    const MAX_MOVEIS = 800;
+
+    // Helper: converte slider % (0-500) em quantidade de objetos por célula
+    // 0-100% = 0 ou 1 (probabilidade). >100% = garantidos + chance extra
+    function densityCount(sliderPct) {
+        const guaranteed = Math.floor(sliderPct / 100);
+        const remainder = (sliderPct % 100) / 100;
+        return guaranteed + (Math.random() < remainder ? 1 : 0);
+    }
+
     // === CADEIRAS EM SALAS ===
     for (const rm of rooms) {
         if (isSpawn(rm.r, rm.c)) continue;
-        if (Math.random() > chCadeiras) continue;
+        if (moveisArray.length >= MAX_MOVEIS) break;
 
-        const count = 1 + Math.floor(Math.random() * 3);
-        for (let i = 0; i < count; i++) {
+        const count = densityCount(rawCadeiras);
+        if (count <= 0) continue;
+
+        for (let i = 0; i < count && moveisArray.length < MAX_MOVEIS; i++) {
             const cx = cellX(rm.c) + (rm.size * cellSize * 0.3) * (Math.random() * 2 - 1) * 0.5;
             const cz = cellZ(rm.r) + (rm.size * cellSize * 0.3) * (Math.random() * 2 - 1) * 0.5;
             const rot = Math.random() * Math.PI * 2;
@@ -824,29 +898,36 @@ function gerarMoveis(grid, rooms, rows, cols, cellSize) {
     for (const rm of rooms) {
         if (rm.size < 2) continue;
         if (isSpawn(rm.r, rm.c)) continue;
-        if (Math.random() > chSofas) continue;
+        if (moveisArray.length >= MAX_MOVEIS) break;
 
-        // Snap à parede — posiciona no centro da borda da sala
+        const sofaCount = densityCount(rawSofas);
+        if (sofaCount <= 0) continue;
+
         const dirs = [
             { x: cellX(rm.c), z: cellZ(rm.r) - rm.size * cellSize * 0.4, rot: 0 },
             { x: cellX(rm.c), z: cellZ(rm.r) + rm.size * cellSize * 0.4, rot: Math.PI },
             { x: cellX(rm.c) - rm.size * cellSize * 0.4, z: cellZ(rm.r), rot: Math.PI / 2 },
             { x: cellX(rm.c) + rm.size * cellSize * 0.4, z: cellZ(rm.r), rot: -Math.PI / 2 }
         ];
-        const chosen = dirs[Math.floor(Math.random() * dirs.length)];
-        const sofa = criarSofa(chosen.x, chosen.z, chosen.rot);
-        scene.add(sofa);
-        objetosDinamicos.push(sofa);
+        for (let s = 0; s < sofaCount && moveisArray.length < MAX_MOVEIS; s++) {
+            const chosen = dirs[(Math.floor(Math.random() * dirs.length) + s) % dirs.length];
+            const ox = (Math.random() - 0.5) * 1.5;
+            const oz = (Math.random() - 0.5) * 1.5;
+            const sofa = criarSofa(chosen.x + ox, chosen.z + oz, chosen.rot);
+            scene.add(sofa);
+            objetosDinamicos.push(sofa);
 
-        const bbox = new THREE.Box3().setFromObject(sofa);
-        wallBoxes.push({ box: bbox, x: chosen.x, z: chosen.z });
-        moveisArray.push({ mesh: sofa, box: bbox, tipo: 'sofa' });
+            const bbox = new THREE.Box3().setFromObject(sofa);
+            wallBoxes.push({ box: bbox, x: chosen.x + ox, z: chosen.z + oz });
+            moveisArray.push({ mesh: sofa, box: bbox, tipo: 'sofa' });
+        }
     }
 
     // === MESAS DE ESCRITÓRIO EM CORREDORES ===
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             if (isSpawn(r, c)) continue;
+            if (moveisArray.length >= MAX_MOVEIS) break;
             const conns = Object.keys(grid[r][c].conn);
             if (conns.length !== 2) continue;
 
@@ -856,19 +937,22 @@ function gerarMoveis(grid, rooms, rows, cols, cellSize) {
             const isOpposite = (Math.abs(dr) === 2 && dc === 0) || (dr === 0 && Math.abs(dc) === 2);
             if (!isOpposite) continue;
 
-            if (Math.random() > chDivisorias) continue;
+            const mesaCount = densityCount(rawDivisorias);
+            if (mesaCount <= 0) continue;
 
             const rot = Math.abs(dr) === 2 ? 0 : Math.PI / 2;
-            const offset = (Math.random() * 2 - 1) * (cellSize * 0.3);
-            const dx = rot === 0 ? offset : 0;
-            const dz = rot !== 0 ? offset : 0;
-            const mesa = criarMesa(cellX(c) + dx, cellZ(r) + dz, rot + (Math.random() - 0.5) * 0.3);
-            scene.add(mesa);
-            objetosDinamicos.push(mesa);
+            for (let m = 0; m < mesaCount && moveisArray.length < MAX_MOVEIS; m++) {
+                const offset = (Math.random() * 2 - 1) * (cellSize * 0.35);
+                const dx = rot === 0 ? offset : 0;
+                const dz = rot !== 0 ? offset : 0;
+                const mesa = criarMesa(cellX(c) + dx, cellZ(r) + dz, rot + (Math.random() - 0.5) * 0.5);
+                scene.add(mesa);
+                objetosDinamicos.push(mesa);
 
-            const bbox = new THREE.Box3().setFromObject(mesa);
-            wallBoxes.push({ box: bbox, x: cellX(c) + dx, z: cellZ(r) + dz });
-            moveisArray.push({ mesh: mesa, box: bbox, tipo: 'mesa' });
+                const bbox = new THREE.Box3().setFromObject(mesa);
+                wallBoxes.push({ box: bbox, x: cellX(c) + dx, z: cellZ(r) + dz });
+                moveisArray.push({ mesh: mesa, box: bbox, tipo: 'mesa' });
+            }
         }
     }
 
@@ -1984,37 +2068,97 @@ function init3D() {
     });
 
     // === PAINEL DEV — BOTÕES DE DEBUG (FASE 2) ===
-    document.getElementById('btn-spawnWire').addEventListener('click', () => {
-        if (entidadeWire && entidadeWire.active) {
-            scene.remove(entidadeWire.group); entidadeWire = null;
-        }
-        spawnWire();
-    });
-    document.getElementById('btn-spawnObs').addEventListener('click', () => {
-        if (observador && observador.active) {
-            scene.remove(observador.group); observador = null;
-        }
-        spawnObservador();
-    });
-    document.getElementById('btn-resetStress').addEventListener('click', () => {
-        stressLevel = 0;
-        renderer.domElement.style.transform = '';
-        camera.fov = 75; camera.updateProjectionMatrix();
-    });
-    document.getElementById('btn-resetCo2').addEventListener('click', () => {
-        co2Nivel = 0.041;
-        faseAlarme = 'normal';
-        document.getElementById('co2-display').style.color = '#6b612c';
-        document.getElementById('co2-display').style.opacity = '1';
-        document.getElementById('alerta-contencao').style.display = 'none';
-        scene.fog.color.set('#2b2713'); scene.background.set('#2b2713');
-        for (let i = 0; i < poolDeLuzesReais.length; i++) poolDeLuzesReais[i].light.color.set(0xffffcc);
-    });
+    // Movidos para hotbar. Mantemos as funções como hotbarSpawn()
 
     // Wire speed live
     document.getElementById('wireSpeed').addEventListener('input', e => {
         if (entidadeWire && entidadeWire.active) entidadeWire.spd = parseFloat(e.target.value);
     });
+
+    // === SISTEMA DE ABAS DO DEV PANEL ===
+    window.switchDevTab = function(tabId) {
+        document.querySelectorAll('.dev-tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.dev-tab').forEach(t => t.classList.remove('active'));
+        document.getElementById('tab-' + tabId).classList.add('active');
+        // Ativar aba visual correspondente
+        const tabs = document.querySelectorAll('.dev-tab');
+        const tabMap = { 'mundo': 0, 'obj': 1, 'ents': 2, 'mon': 3 };
+        if (tabMap[tabId] !== undefined) tabs[tabMap[tabId]].classList.add('active');
+    };
+
+    // === HOTBAR DE SPAWN (TAB) ===
+    let hotbarVisible = false;
+    const hotbar = document.getElementById('hotbar-spawn');
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab' && modoDevAtivo) {
+            e.preventDefault();
+            hotbarVisible = !hotbarVisible;
+            hotbar.style.display = hotbarVisible ? 'block' : 'none';
+        }
+    });
+
+    window.hotbarSpawn = function(tipo) {
+        // Posição 3m à frente do jogador
+        const dir = new THREE.Vector3();
+        camera.getWorldDirection(dir);
+        const spawnX = camera.position.x + dir.x * 3;
+        const spawnZ = camera.position.z + dir.z * 3;
+
+        let obj = null;
+        switch (tipo) {
+            case 'cadeira':
+                obj = criarCadeira(spawnX, spawnZ, Math.random() * Math.PI * 2, 1);
+                break;
+            case 'sofa':
+                obj = criarSofa(spawnX, spawnZ, Math.random() * Math.PI * 2);
+                break;
+            case 'mesa':
+                obj = criarMesa(spawnX, spawnZ, Math.random() * Math.PI * 2);
+                break;
+            case 'relogio':
+                obj = criarRelogio(spawnX, 2.5, spawnZ, Math.random() * Math.PI * 2);
+                break;
+            case 'bebedouro':
+                obj = criarBebedouro(spawnX, spawnZ);
+                break;
+            case 'arquivo':
+                obj = criarArquivo(spawnX, spawnZ);
+                break;
+            case 'quadro':
+                obj = criarQuadro(spawnX, 2.2, spawnZ, Math.random() * Math.PI * 2);
+                break;
+            case 'wire':
+                if (entidadeWire && entidadeWire.active) { scene.remove(entidadeWire.group); entidadeWire = null; }
+                spawnWire();
+                return;
+            case 'observador':
+                if (observador && observador.active) { scene.remove(observador.group); observador = null; }
+                spawnObservador();
+                return;
+            case 'resetStress':
+                stressLevel = 0; colapsoProgress = 0; colapsoForcado = false; tempoParado = 0;
+                renderer.domElement.style.transform = '';
+                camera.fov = 75; camera.updateProjectionMatrix();
+                return;
+            case 'resetCo2':
+                co2Nivel = 0.041; faseAlarme = 'normal';
+                document.getElementById('co2-display').style.color = '#6b612c';
+                document.getElementById('alerta-contencao').style.display = 'none';
+                scene.fog.color.set('#2b2713'); scene.background.set('#2b2713');
+                for (let i = 0; i < poolDeLuzesReais.length; i++) poolDeLuzesReais[i].light.color.set(0xffffcc);
+                return;
+        }
+
+        if (obj) {
+            scene.add(obj);
+            objetosDinamicos.push(obj);
+            const bbox = new THREE.Box3().setFromObject(obj);
+            wallBoxes.push({ box: bbox, x: spawnX, z: spawnZ });
+            moveisArray.push({ mesh: obj, box: bbox, tipo: tipo });
+            console.log(`[HOTBAR] Spawned ${tipo} at (${spawnX.toFixed(1)}, ${spawnZ.toFixed(1)})`);
+        }
+    };
 
     // === INICIAR GAME LOOP ===
     animate();
