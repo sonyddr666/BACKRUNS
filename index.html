@@ -425,6 +425,13 @@ let wallBoxes = [];
 let objetosDinamicos = [];
 let portasEscuras = [];
 
+// Noclip / Fly (L)
+let noclipAtivo = false;
+
+// Jump (Space)
+let velocidadeY = 0;       // velocidade vertical
+let isOnGround = true;     // está no chão
+
 let co2Nivel = 0.041;
 let frameCount = 0;
 
@@ -442,6 +449,8 @@ let stressLevel = 0;       // 0.0 → 1.0
 let raycaster = new THREE.Raycaster();
 let roomsRef = [];         // referência às salas
 let sprintDuration = 0;    // quanto tempo em sprint contínuo
+let escadasRef = [];       // {x, z, radius} — posições de escadas entre andares
+let andarAtual = 0;        // 0 = térreo, 1 = acima
 
 // Áudio (2C)
 let prevBobSign = 1;
@@ -465,6 +474,8 @@ let colapsoGameTime = 0;    // tempo total de jogo acumulado
 
 const MAP_SIZE = 144;
 const WALL_HEIGHT = 4.0;
+const FLOOR_GAP = 0.15;   // gap entre teto do andar 0 e chão do andar 1
+const FLOOR1_BASE = WALL_HEIGHT + FLOOR_GAP; // Y base do andar 1 = 4.15
 const DOOR_WIDTH = 2.2;
 const DOOR_HEIGHT = 3.2;
 
@@ -1930,7 +1941,101 @@ function reconstruirMundo() {
         l.assignedPanel = null;
     }
 
-    console.log(`[AURA] Mundo reconstruído: ${rows}x${cols} cells, ${wallBoxes.length} walls, ${portasEscuras.length} dark doors, ${todasAsLuminarias.length} lights`);
+    // ═══════════════════════════════════════════════
+    // ANDAR 1 (acima) — Segundo labirinto offset em Y
+    // ═══════════════════════════════════════════════
+    const grid2 = gerarLabirinto(rows, cols);
+    limparSpawn(grid2, rows, cols);
+    const rooms2 = criarSalas(grid2, rows, cols, Math.max(3, Math.floor(rows * cols / 50)));
+    abrirExtras(grid2, rows, cols, extraOpen * 0.8); // Mais fechado em cima
+
+    const yOffset = FLOOR1_BASE; // 4.15 — offset vertical pro andar 1
+
+    // Geometrias do andar 1 (mesmas dimensões)
+    const geoWallH2  = new THREE.BoxGeometry(cellSize, WALL_HEIGHT, thick);
+    const geoWallV2  = new THREE.BoxGeometry(thick, WALL_HEIGHT, cellSize);
+
+    // Paredes horizontais do andar 1
+    for (let r = 0; r < rows - 1; r++) {
+        for (let c = 0; c < cols; c++) {
+            const connected = grid2[r][c].conn[(r + 1) + ',' + c];
+            if (!connected && !isSpawnEdge(r, c, r + 1, c)) {
+                const wx = cellX(c);
+                const wz = edgeZ(r + 1);
+                addWall(geoWallH2, matParede, wx, yOffset + WALL_HEIGHT / 2, wz);
+            }
+        }
+    }
+
+    // Paredes verticais do andar 1
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols - 1; c++) {
+            const connected = grid2[r][c].conn[r + ',' + (c + 1)];
+            if (!connected && !isSpawnEdge(r, c, r, c + 1)) {
+                const wx = edgeX(c + 1);
+                const wz = cellZ(r);
+                addWall(geoWallV2, matParede, wx, yOffset + WALL_HEIGHT / 2, wz);
+            }
+        }
+    }
+
+    // Bordas externas do andar 1
+    for (let c = 0; c < cols; c++) {
+        addWall(geoWallH2, matParede, cellX(c), yOffset + WALL_HEIGHT / 2, edgeZ(0));
+        addWall(geoWallH2, matParede, cellX(c), yOffset + WALL_HEIGHT / 2, edgeZ(rows));
+    }
+    for (let r = 0; r < rows; r++) {
+        addWall(geoWallV2, matParede, edgeX(0), yOffset + WALL_HEIGHT / 2, cellZ(r));
+        addWall(geoWallV2, matParede, edgeX(cols), yOffset + WALL_HEIGHT / 2, cellZ(r));
+    }
+
+    // Luminárias do andar 1 (mais escassas — 40% chance)
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (Math.random() > 0.4) continue;
+            const matPlaca2 = new THREE.MeshBasicMaterial({ color: 0xccccaa, side: THREE.DoubleSide });
+            const placa2 = add(geoLuz, matPlaca2, cellX(c), yOffset + 3.98, cellZ(r));
+            placa2.rotation.x = Math.PI / 2;
+            todasAsLuminarias.push({
+                x: cellX(c), z: cellZ(r), mesh: placa2,
+                quebrada: Math.random() > 0.7
+            });
+        }
+    }
+
+    // === ESCADAS (buracos no teto/chão que conectam andares) ===
+    // Escolher 3 salas aleatórias pra ter escadas
+    escadasRef = [];
+    const salasEscada = rooms.filter(rm => rm.size >= 2).sort(() => Math.random() - 0.5).slice(0, 3);
+    for (const rm of salasEscada) {
+        const sx = cellX(rm.c);
+        const sz = cellZ(rm.r);
+
+        // Rampa visual (caixa inclinada)
+        const rampa = new THREE.Mesh(
+            new THREE.BoxGeometry(2.5, 0.15, 4.5),
+            new THREE.MeshStandardMaterial({ color: 0x4a4228, roughness: 0.8 })
+        );
+        rampa.position.set(sx, WALL_HEIGHT / 2, sz);
+        rampa.rotation.x = -Math.PI / 6; // ~30 graus de inclinação
+        scene.add(rampa);
+        objetosDinamicos.push(rampa);
+
+        // Marcador visual (borda brilhante ao redor do buraco)
+        const marcador = new THREE.Mesh(
+            new THREE.RingGeometry(1.0, 1.5, 8),
+            new THREE.MeshBasicMaterial({ color: 0xffdd44, side: THREE.DoubleSide, transparent: true, opacity: 0.3 })
+        );
+        marcador.rotation.x = Math.PI / 2;
+        marcador.position.set(sx, WALL_HEIGHT - 0.01, sz);
+        scene.add(marcador);
+        objetosDinamicos.push(marcador);
+
+        // Guardar posição da escada pra detecção no animate
+        escadasRef.push({ x: sx, z: sz, radius: 1.8 });
+    }
+
+    console.log(`[AURA] Mundo reconstruído: ${rows}x${cols} cells, ${wallBoxes.length} walls, ${portasEscuras.length} dark doors, ${todasAsLuminarias.length} lights, ${escadasRef.length} escadas, 2 andares`);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1966,8 +2071,17 @@ function init3D() {
     controls.addEventListener('unlock', () => {
         crosshair.style.display = 'none';
         promptPorta.style.display = 'none';
-        if (modoDevAtivo) painelDev.style.display = 'block';
+        if (modoDevAtivo) {
+            painelDev.style.display = 'block';
+        }
         else { telaPausa.style.display = 'flex'; hudStatus.style.display = 'none'; }
+    });
+
+    // DEV MODE: clicar no canvas do jogo re-locka direto
+    renderer.domElement.addEventListener('click', () => {
+        if (modoDevAtivo && !controls.isLocked) {
+            controls.lock();
+        }
     });
 
     // === MATERIAIS ===
@@ -1980,7 +2094,7 @@ function init3D() {
         roughness: 0.2, metalness: 0.35, side: THREE.DoubleSide
     });
 
-    // === CHÃO E TETO ===
+    // === CHÃO E TETO (ANDAR 0) ===
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), matChao);
     floor.rotation.x = -Math.PI / 2;
     scene.add(floor);
@@ -1988,7 +2102,22 @@ function init3D() {
     const ceil = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), matTeto);
     ceil.rotation.x = Math.PI / 2;
     ceil.position.y = WALL_HEIGHT;
+    ceil.material = matTeto.clone();
+    ceil.material.side = THREE.DoubleSide;
     scene.add(ceil);
+
+    // === ANDAR 1 (acima) — separado por FLOOR_GAP ===
+    const floor2 = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), matChao.clone());
+    floor2.rotation.x = -Math.PI / 2;
+    floor2.position.y = FLOOR1_BASE; // 4.15 — acima do teto do andar 0
+    floor2.material.side = THREE.DoubleSide;
+    scene.add(floor2);
+
+    const ceil2 = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), matTeto.clone());
+    ceil2.rotation.x = Math.PI / 2;
+    ceil2.position.y = FLOOR1_BASE + WALL_HEIGHT; // 8.15
+    ceil2.material.side = THREE.DoubleSide;
+    scene.add(ceil2);
 
     // === POOL DE LUZES (15 PointLights que teleportam pras mais próximas) ===
     for (let i = 0; i < 15; i++) {
@@ -2013,6 +2142,16 @@ function init3D() {
             case 'KeyD': case 'ArrowRight': moveRight    = true; break;
             case 'ShiftLeft': case 'ShiftRight': sprinting = true; break;
             case 'KeyE': interactPressed = true; break;
+            case 'KeyL':
+                noclipAtivo = !noclipAtivo;
+                console.log('[DEV] Noclip:', noclipAtivo ? 'ATIVADO' : 'DESATIVADO');
+                break;
+            case 'Space':
+                if (isOnGround && !noclipAtivo) {
+                    velocidadeY = 5.5; // impulso do pulo
+                    isOnGround = false;
+                }
+                break;
         }
     });
     document.addEventListener('keyup', e => {
@@ -2204,38 +2343,137 @@ function animate() {
         // ——— COLISÃO SEPARADA POR EIXO ———
         const posDesejada = camera.position.clone();
         const pSize = 0.6;
+        const feetY = camera.position.y - 1.2; // pés do jogador (camera = olhos)
 
-        const proximas = wallBoxes.filter(w =>
-            Math.abs(w.x - posDesejada.x) < 16 && Math.abs(w.z - posDesejada.z) < 16
-        );
+        if (!noclipAtivo) {
+            const proximas = wallBoxes.filter(w =>
+                Math.abs(w.x - posDesejada.x) < 16 && Math.abs(w.z - posDesejada.z) < 16
+            );
 
-        // Testar X
-        camera.position.set(posDesejada.x, camera.position.y, posAnterior.z);
-        const boxX = new THREE.Box3().setFromCenterAndSize(
-            new THREE.Vector3(camera.position.x, 2, camera.position.z),
-            new THREE.Vector3(pSize, WALL_HEIGHT, pSize)
-        );
-        for (const w of proximas) {
-            if (boxX.intersectsBox(w.box)) { camera.position.x = posAnterior.x; break; }
+            // Testar X
+            camera.position.set(posDesejada.x, camera.position.y, posAnterior.z);
+            const testBoxX = new THREE.Box3().setFromCenterAndSize(
+                new THREE.Vector3(camera.position.x, feetY + 0.5, camera.position.z),
+                new THREE.Vector3(pSize, 1.0, pSize)
+            );
+            for (const w of proximas) {
+                if (!testBoxX.intersectsBox(w.box)) continue;
+                // Se os pés estão acima do topo do objeto → pode andar por cima
+                if (feetY >= w.box.max.y - 0.1) continue;
+                camera.position.x = posAnterior.x; break;
+            }
+
+            // Testar Z
+            camera.position.set(camera.position.x, camera.position.y, posDesejada.z);
+            const testBoxZ = new THREE.Box3().setFromCenterAndSize(
+                new THREE.Vector3(camera.position.x, feetY + 0.5, camera.position.z),
+                new THREE.Vector3(pSize, 1.0, pSize)
+            );
+            for (const w of proximas) {
+                if (!testBoxZ.intersectsBox(w.box)) continue;
+                if (feetY >= w.box.max.y - 0.1) continue;
+                camera.position.z = posAnterior.z; break;
+            }
         }
 
-        // Testar Z
-        camera.position.set(camera.position.x, camera.position.y, posDesejada.z);
-        const boxZ = new THREE.Box3().setFromCenterAndSize(
-            new THREE.Vector3(camera.position.x, 2, camera.position.z),
-            new THREE.Vector3(pSize, WALL_HEIGHT, pSize)
-        );
-        for (const w of proximas) {
-            if (boxZ.intersectsBox(w.box)) { camera.position.z = posAnterior.z; break; }
-        }
-
-        // Head bob
+        // === GRAVIDADE + PULO + NOCLIP FLY ===
         const andando = moveForward || moveBackward || moveLeft || moveRight;
         const bobSpeed = sprinting ? 0.012 : 0.007;
         const bobAmp = sprinting ? 0.08 : 0.05;
-        camera.position.y = andando
-            ? 1.6 + Math.sin(time * bobSpeed) * bobAmp
-            : 1.6 + Math.sin(time * 0.001) * 0.015;
+
+        if (noclipAtivo) {
+            // Modo voo (ambos os andares)
+            const lookDir = new THREE.Vector3();
+            camera.getWorldDirection(lookDir);
+            if (moveForward) camera.position.y += lookDir.y * 8 * delta;
+            if (sprinting) camera.position.y -= 5 * delta;
+            camera.position.y = Math.max(0.3, Math.min(FLOOR1_BASE + WALL_HEIGHT + 3, camera.position.y));
+            // Atualizar andar pra referência
+            andarAtual = camera.position.y > FLOOR1_BASE ? 1 : 0;
+        } else {
+            // Gravidade real
+            velocidadeY -= 15 * delta;
+            camera.position.y += velocidadeY * delta;
+
+            // === Determinar andar atual e limites ===
+            const floorBase = andarAtual === 0 ? 0 : FLOOR1_BASE;
+            const floorCeil = andarAtual === 0 ? WALL_HEIGHT : (FLOOR1_BASE + WALL_HEIGHT);
+            const eyeHeight = 1.6;
+
+            // === Detectar chão dinâmico (móveis embaixo dos pés) ===
+            let alturaChao = floorBase + eyeHeight;
+            const feetCheck = camera.position.y - 1.2;
+
+            // Procurar superfícies de móveis embaixo
+            for (const m of moveisArray) {
+                if (!m.box) continue;
+                const xOverlap = camera.position.x + pSize/2 > m.box.min.x && camera.position.x - pSize/2 < m.box.max.x;
+                const zOverlap = camera.position.z + pSize/2 > m.box.min.z && camera.position.z - pSize/2 < m.box.max.z;
+                if (xOverlap && zOverlap) {
+                    const movelTop = m.box.max.y + 1.2;
+                    if (feetCheck <= m.box.max.y + 0.2 && feetCheck >= m.box.max.y - 0.5) {
+                        if (movelTop > alturaChao) alturaChao = movelTop;
+                    }
+                }
+            }
+
+            // Chão
+            if (camera.position.y <= alturaChao) {
+                camera.position.y = alturaChao;
+                velocidadeY = 0;
+                isOnGround = true;
+            }
+
+            // === Escada: perto de uma escada → permite subir/descer entre andares ===
+            let nearStair = false;
+            for (const esc of escadasRef) {
+                const dx = camera.position.x - esc.x;
+                const dz = camera.position.z - esc.z;
+                if (dx * dx + dz * dz < esc.radius * esc.radius) {
+                    nearStair = true;
+                    break;
+                }
+            }
+
+            // Teto do andar atual
+            if (camera.position.y >= floorCeil - 0.3) {
+                if (nearStair && andarAtual === 0) {
+                    // Subir pro andar 1!
+                    andarAtual = 1;
+                    camera.position.y = FLOOR1_BASE + eyeHeight;
+                    velocidadeY = 0;
+                    isOnGround = true;
+                    console.log('[AURA] Subiu pro Andar 1!');
+                } else {
+                    // Bater no teto normalmente
+                    camera.position.y = floorCeil - 0.3;
+                    velocidadeY = -1;
+                }
+            }
+
+            // Cair pelo chão do andar 1 → voltar pro andar 0
+            if (andarAtual === 1 && camera.position.y < FLOOR1_BASE + 0.5) {
+                if (nearStair) {
+                    andarAtual = 0;
+                    camera.position.y = WALL_HEIGHT - 0.5;
+                    velocidadeY = -2;
+                    isOnGround = false;
+                    console.log('[AURA] Desceu pro Andar 0!');
+                } else {
+                    // Manter no chão do andar 1
+                    camera.position.y = FLOOR1_BASE + eyeHeight;
+                    velocidadeY = 0;
+                    isOnGround = true;
+                }
+            }
+
+            // Head bob (só no chão)
+            if (isOnGround) {
+                camera.position.y = andando
+                    ? alturaChao + Math.sin(time * bobSpeed) * bobAmp
+                    : alturaChao + Math.sin(time * 0.001) * 0.015;
+            }
+        }
 
         // === FASE 2C: SOM DE PASSOS (sincronizado com head bob) ===
         const currentBobVal = Math.sin(time * bobSpeed);
