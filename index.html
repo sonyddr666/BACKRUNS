@@ -122,7 +122,7 @@
 </div>
 
 <div id="painel-dev" onmousedown="event.stopPropagation()" onclick="event.stopPropagation()" onmouseup="event.stopPropagation()">
-    <h2>AURA ENGINE v4.0</h2>
+    <h2>AURA ENGINE v5.0</h2>
 
     <div class="dev-section">
         <span class="dev-section-title">▸ GEOMETRIA DO LABIRINTO</span>
@@ -194,7 +194,7 @@
                 oninput="document.getElementById('v-sofas').innerText=this.value">
         </div>
         <div class="dev-group">
-            <label>Divisórias (% corredores) <span id="v-divisorias">15</span>%</label>
+            <label>Mesas (% corredores) <span id="v-divisorias">15</span>%</label>
             <input type="range" id="chDivisorias" min="0" max="50" step="5" value="15"
                 oninput="document.getElementById('v-divisorias').innerText=this.value">
         </div>
@@ -509,28 +509,208 @@ function criarSofa(x, z, rot) {
     return g;
 }
 
-function criarDivisoria(x, z, rot) {
+function criarMesa(x, z, rot) {
     const g = new THREE.Group();
-    const matDiv = new THREE.MeshStandardMaterial({ color: 0xb8ad8e, roughness: 0.9 });
+    const matMesa = new THREE.MeshStandardMaterial({ color: 0x8a7a5a, roughness: 0.85 });
+    const matPerna = new THREE.MeshStandardMaterial({ color: 0x666660, roughness: 0.6, metalness: 0.4 });
 
-    const painel = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.2, 0.12), matDiv);
-    painel.position.y = 1.1;
-    g.add(painel);
+    // Tampo
+    const tampo = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.06, 0.8), matMesa);
+    tampo.position.y = 0.75;
+    g.add(tampo);
 
-    const peGeo = new THREE.BoxGeometry(0.5, 0.04, 0.4);
-    const pe1 = new THREE.Mesh(peGeo, matDiv);
-    pe1.position.set(-1.2, 0.02, 0);
-    g.add(pe1);
-    const pe2 = new THREE.Mesh(peGeo, matDiv);
-    pe2.position.set(1.2, 0.02, 0);
-    g.add(pe2);
+    // 4 pernas metálicas
+    const pernaGeo = new THREE.BoxGeometry(0.05, 0.75, 0.05);
+    [[-0.75, -0.35], [0.75, -0.35], [-0.75, 0.35], [0.75, 0.35]].forEach(([px, pz]) => {
+        const p = new THREE.Mesh(pernaGeo, matPerna);
+        p.position.set(px, 0.375, pz);
+        g.add(p);
+    });
+
+    // Gaveteiro lateral (50% chance)
+    if (Math.random() > 0.5) {
+        const matGav = new THREE.MeshStandardMaterial({ color: 0x777770, roughness: 0.7, metalness: 0.3 });
+        const gav = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.55, 0.6), matGav);
+        gav.position.set(0.55, 0.35, 0);
+        g.add(gav);
+        // Puxadores
+        const puxGeo = new THREE.BoxGeometry(0.15, 0.02, 0.02);
+        const matPux = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.6 });
+        [0.5, 0.35, 0.2].forEach(py => {
+            const pux = new THREE.Mesh(puxGeo, matPux);
+            pux.position.set(0.73, py, 0);
+            g.add(pux);
+        });
+    }
+
+    // Monitor desligado (30% chance)
+    if (Math.random() < 0.3) {
+        const matTela = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.3 });
+        const tela = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.03), matTela);
+        tela.position.set(-0.3, 1.0, -0.1);
+        g.add(tela);
+        // Base do monitor
+        const baseM = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.02, 0.15), matPerna);
+        baseM.position.set(-0.3, 0.78, -0.1);
+        g.add(baseM);
+        const haste = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.18, 0.03), matPerna);
+        haste.position.set(-0.3, 0.87, -0.1);
+        g.add(haste);
+    }
 
     g.position.set(x, 0, z);
     g.rotation.y = rot;
-    // 20% chance inclinada
-    if (Math.random() < 0.2) {
-        g.rotation.z = (Math.random() > 0.5 ? 1 : -1) * 0.15;
+    return g;
+}
+
+function criarRelogio(x, y, z, faceRot) {
+    const g = new THREE.Group();
+
+    // Face do relógio (cilindro achatado)
+    const matFace = new THREE.MeshStandardMaterial({ color: 0xeeeedd, roughness: 0.5 });
+    const face = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.03, 24), matFace);
+    face.rotation.x = Math.PI / 2;
+    g.add(face);
+
+    // Borda
+    const matBorda = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.4, metalness: 0.5 });
+    const borda = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.015, 8, 24), matBorda);
+    borda.rotation.x = Math.PI / 2;
+    g.add(borda);
+
+    // Ponteiros (hora e minuto)
+    const matPont = new THREE.MeshBasicMaterial({ color: 0x111111 });
+    // Minuto
+    const minuto = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.2, 0.005), matPont);
+    minuto.position.set(0, 0.08, 0.02);
+    minuto.rotation.z = Math.random() * Math.PI * 2;
+    g.add(minuto);
+    // Hora
+    const hora = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.13, 0.005), matPont);
+    hora.position.set(0, 0.05, 0.025);
+    hora.rotation.z = Math.random() * Math.PI * 2;
+    g.add(hora);
+
+    // Ponto central
+    const centro = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 8), matBorda);
+    centro.position.z = 0.03;
+    g.add(centro);
+
+    g.position.set(x, y, z);
+    g.rotation.y = faceRot;
+    return g;
+}
+
+function criarBebedouro(x, z) {
+    const g = new THREE.Group();
+    const matCorpo = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.2 });
+    const matAgua = new THREE.MeshStandardMaterial({ color: 0x88aacc, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.6 });
+
+    // Corpo
+    const corpo = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.0, 0.35), matCorpo);
+    corpo.position.y = 0.5;
+    g.add(corpo);
+
+    // Galão de água (cilindro invertido no topo)
+    const galao = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.45, 12), matAgua);
+    galao.position.y = 1.25;
+    g.add(galao);
+
+    // Tampa do galão
+    const tampa = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.03, 12),
+        new THREE.MeshStandardMaterial({ color: 0x3366aa, roughness: 0.3 }));
+    tampa.position.y = 1.48;
+    g.add(tampa);
+
+    // Bandeja de copos
+    const bandeja = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.02, 0.1), matCorpo);
+    bandeja.position.set(0.22, 0.7, 0);
+    g.add(bandeja);
+
+    g.position.set(x, 0, z);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return g;
+}
+
+function criarArquivo(x, z) {
+    const g = new THREE.Group();
+    const matCorpo = new THREE.MeshStandardMaterial({ color: 0x6a6a64, roughness: 0.7, metalness: 0.35 });
+    const matPux = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.6, roughness: 0.3 });
+
+    // Corpo do armário
+    const corpo = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.55), matCorpo);
+    corpo.position.y = 0.7;
+    g.add(corpo);
+
+    // 4 gavetas (linhas de separação + puxadores)
+    for (let i = 0; i < 4; i++) {
+        const py = 0.25 + i * 0.33;
+        // Linha de separação
+        const linha = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.008, 0.01), matPux);
+        linha.position.set(0, py, 0.28);
+        g.add(linha);
+        // Puxador
+        const pux = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.02), matPux);
+        pux.position.set(0, py + 0.12, 0.29);
+        g.add(pux);
     }
+
+    // Gaveta aberta (20% chance) — uma gaveta projetada pra fora
+    if (Math.random() < 0.2) {
+        const gavAberta = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.28, 0.3), matCorpo);
+        const gavetaIdx = Math.floor(Math.random() * 4);
+        gavAberta.position.set(0, 0.25 + gavetaIdx * 0.33 + 0.14, 0.42);
+        g.add(gavAberta);
+    }
+
+    g.position.set(x, 0, z);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return g;
+}
+
+function criarQuadro(x, y, z, faceRot) {
+    const g = new THREE.Group();
+
+    // Canvas procedural com arte abstrata
+    const cvs = document.createElement('canvas'); cvs.width = 128; cvs.height = 96;
+    const ctx = cvs.getContext('2d');
+    // Fundo
+    const bgColors = ['#8a7a5a', '#5a6a4a', '#6a5a6a', '#4a5a7a', '#7a6a4a'];
+    ctx.fillStyle = bgColors[Math.floor(Math.random() * bgColors.length)];
+    ctx.fillRect(0, 0, 128, 96);
+    // Formas abstratas
+    for (let i = 0; i < 4 + Math.random() * 6; i++) {
+        ctx.fillStyle = `rgba(${Math.random()*255|0},${Math.random()*200|0},${Math.random()*150|0},${0.2+Math.random()*0.4})`;
+        if (Math.random() > 0.5) {
+            ctx.fillRect(Math.random()*100, Math.random()*80, 15+Math.random()*40, 10+Math.random()*30);
+        } else {
+            ctx.beginPath();
+            ctx.arc(Math.random()*128, Math.random()*96, 5+Math.random()*20, 0, Math.PI*2);
+            ctx.fill();
+        }
+    }
+    // Verniz/brilho
+    ctx.fillStyle = 'rgba(255,255,200,0.04)';
+    ctx.fillRect(0, 0, 128, 96);
+
+    const texQuadro = new THREE.CanvasTexture(cvs);
+    const matQuadro = new THREE.MeshStandardMaterial({ map: texQuadro, roughness: 0.3 });
+    const matMoldura = new THREE.MeshStandardMaterial({ color: 0x3a3020, roughness: 0.6 });
+
+    // Quadro
+    const pintura = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.6, 0.02), matQuadro);
+    g.add(pintura);
+
+    // Moldura (4 barras)
+    const barraH = new THREE.BoxGeometry(0.86, 0.03, 0.04);
+    const barraV = new THREE.BoxGeometry(0.03, 0.66, 0.04);
+    g.add(new THREE.Mesh(barraH, matMoldura).translateY(0.315));
+    g.add(new THREE.Mesh(barraH, matMoldura).translateY(-0.315));
+    g.add(new THREE.Mesh(barraV, matMoldura).translateX(0.415));
+    g.add(new THREE.Mesh(barraV, matMoldura).translateX(-0.415));
+
+    g.position.set(x, y, z);
+    g.rotation.y = faceRot;
     return g;
 }
 
@@ -548,10 +728,18 @@ function gerarMoveis(grid, rooms, rows, cols, cellSize) {
             && c >= spawnCC - spawnRad && c <= spawnCC + spawnRad;
     }
 
-    // === CADEIRAS EM SALAS (60% das salas, 1-3 por sala) ===
+    // Ler chances do painel dev (com fallback pros defaults)
+    const chCadeiras = (parseInt(document.getElementById('chCadeiras')?.value) || 60) / 100;
+    const chSofas = (parseInt(document.getElementById('chSofas')?.value) || 40) / 100;
+    const chDivisorias = (parseInt(document.getElementById('chDivisorias')?.value) || 15) / 100;
+    const chGigante = (parseInt(document.getElementById('chGigante')?.value) || 5) / 100;
+    const maxProj = parseInt(document.getElementById('chProjetores')?.value) || 2;
+    const zonaFalhaAtiva = document.getElementById('chZonaFalha')?.checked !== false;
+
+    // === CADEIRAS EM SALAS ===
     for (const rm of rooms) {
         if (isSpawn(rm.r, rm.c)) continue;
-        if (Math.random() > 0.6) continue;
+        if (Math.random() > chCadeiras) continue;
 
         const count = 1 + Math.floor(Math.random() * 3);
         for (let i = 0; i < count; i++) {
@@ -569,11 +757,11 @@ function gerarMoveis(grid, rooms, rows, cols, cellSize) {
         }
     }
 
-    // === SOFÁS (40% das salas ≥ 2x2) ===
+    // === SOFÁS ===
     for (const rm of rooms) {
         if (rm.size < 2) continue;
         if (isSpawn(rm.r, rm.c)) continue;
-        if (Math.random() > 0.4) continue;
+        if (Math.random() > chSofas) continue;
 
         // Snap à parede — posiciona no centro da borda da sala
         const dirs = [
@@ -592,11 +780,10 @@ function gerarMoveis(grid, rooms, rows, cols, cellSize) {
         moveisArray.push({ mesh: sofa, box: bbox, tipo: 'sofa' });
     }
 
-    // === DIVISÓRIAS EM CORREDORES (~15%) ===
+    // === MESAS DE ESCRITÓRIO EM CORREDORES ===
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
             if (isSpawn(r, c)) continue;
-            // Corredor = exatamente 2 conexões opostas
             const conns = Object.keys(grid[r][c].conn);
             if (conns.length !== 2) continue;
 
@@ -606,27 +793,27 @@ function gerarMoveis(grid, rooms, rows, cols, cellSize) {
             const isOpposite = (Math.abs(dr) === 2 && dc === 0) || (dr === 0 && Math.abs(dc) === 2);
             if (!isOpposite) continue;
 
-            if (Math.random() > 0.15) continue;
+            if (Math.random() > chDivisorias) continue;
 
             const rot = Math.abs(dr) === 2 ? 0 : Math.PI / 2;
-            const offset = (Math.random() * 2 - 1) * 1.5;
+            const offset = (Math.random() * 2 - 1) * (cellSize * 0.3);
             const dx = rot === 0 ? offset : 0;
             const dz = rot !== 0 ? offset : 0;
-            const div = criarDivisoria(cellX(c) + dx, cellZ(r) + dz, rot);
-            scene.add(div);
-            objetosDinamicos.push(div);
+            const mesa = criarMesa(cellX(c) + dx, cellZ(r) + dz, rot + (Math.random() - 0.5) * 0.3);
+            scene.add(mesa);
+            objetosDinamicos.push(mesa);
 
-            const bbox = new THREE.Box3().setFromObject(div);
+            const bbox = new THREE.Box3().setFromObject(mesa);
             wallBoxes.push({ box: bbox, x: cellX(c) + dx, z: cellZ(r) + dz });
-            moveisArray.push({ mesh: div, box: bbox, tipo: 'divisoria' });
+            moveisArray.push({ mesh: mesa, box: bbox, tipo: 'mesa' });
         }
     }
 
-    // === CADEIRA GIGANTE (5% das salas 3x3) ===
+    // === CADEIRA GIGANTE ===
     for (const rm of rooms) {
         if (rm.size !== 3) continue;
         if (isSpawn(rm.r, rm.c)) continue;
-        if (Math.random() > 0.05) continue;
+        if (Math.random() > chGigante) continue;
 
         rm.temCadeiraGigante = true;
         const cx = cellX(rm.c) + (rm.size - 1) * cellSize * 0.25;
@@ -638,6 +825,98 @@ function gerarMoveis(grid, rooms, rows, cols, cellSize) {
         const bbox = new THREE.Box3().setFromObject(cadeira);
         wallBoxes.push({ box: bbox, x: cx, z: cz });
         moveisArray.push({ mesh: cadeira, box: bbox, tipo: 'cadeiraGigante' });
+    }
+
+    // === RELÓGIOS DE PAREDE (~1 a cada 8 células) ===
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (isSpawn(r, c)) continue;
+            if (Math.random() > 0.12) continue;
+
+            // Escolher uma parede adjacente
+            const conns = Object.keys(grid[r][c].conn);
+            // Colocar na parede oposta a uma conexão
+            const wallDirs = [
+                { check: !conns.some(k => { const [kr,kc] = k.split(',').map(Number); return kr < r; }),
+                  x: cellX(c), z: cellZ(r) - cellSize/2 + 0.62, faceRot: 0 },
+                { check: !conns.some(k => { const [kr,kc] = k.split(',').map(Number); return kr > r; }),
+                  x: cellX(c), z: cellZ(r) + cellSize/2 - 0.62, faceRot: Math.PI },
+                { check: !conns.some(k => { const [kr,kc] = k.split(',').map(Number); return kc < c; }),
+                  x: cellX(c) - cellSize/2 + 0.62, z: cellZ(r), faceRot: Math.PI/2 },
+                { check: !conns.some(k => { const [kr,kc] = k.split(',').map(Number); return kc > c; }),
+                  x: cellX(c) + cellSize/2 - 0.62, z: cellZ(r), faceRot: -Math.PI/2 }
+            ].filter(d => d.check);
+
+            if (wallDirs.length === 0) continue;
+            const wd = wallDirs[Math.floor(Math.random() * wallDirs.length)];
+            const rel = criarRelogio(wd.x, 2.8, wd.z, wd.faceRot);
+            scene.add(rel);
+            objetosDinamicos.push(rel);
+            moveisArray.push({ mesh: rel, tipo: 'relogio' });
+        }
+    }
+
+    // === BEBEDOUROS (~1 a cada 25 células, em cantos) ===
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (isSpawn(r, c)) continue;
+            if (Math.random() > 0.04) continue;
+
+            const bx = cellX(c) + (Math.random() > 0.5 ? 1 : -1) * cellSize * 0.35;
+            const bz = cellZ(r) + (Math.random() > 0.5 ? 1 : -1) * cellSize * 0.35;
+            const beb = criarBebedouro(bx, bz);
+            scene.add(beb);
+            objetosDinamicos.push(beb);
+
+            const bbox = new THREE.Box3().setFromObject(beb);
+            wallBoxes.push({ box: bbox, x: bx, z: bz });
+            moveisArray.push({ mesh: beb, box: bbox, tipo: 'bebedouro' });
+        }
+    }
+
+    // === ARMÁRIOS DE ARQUIVO (~1 a cada 20 células) ===
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (isSpawn(r, c)) continue;
+            if (Math.random() > 0.05) continue;
+
+            const ax = cellX(c) + (Math.random() * 2 - 1) * cellSize * 0.3;
+            const az = cellZ(r) + (Math.random() * 2 - 1) * cellSize * 0.3;
+            const arq = criarArquivo(ax, az);
+            scene.add(arq);
+            objetosDinamicos.push(arq);
+
+            const bbox = new THREE.Box3().setFromObject(arq);
+            wallBoxes.push({ box: bbox, x: ax, z: az });
+            moveisArray.push({ mesh: arq, box: bbox, tipo: 'arquivo' });
+        }
+    }
+
+    // === QUADROS / PINTURAS NAS PAREDES (~1 a cada 12 células) ===
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (isSpawn(r, c)) continue;
+            if (Math.random() > 0.08) continue;
+
+            const conns = Object.keys(grid[r][c].conn);
+            const wallDirs = [
+                { check: !conns.some(k => { const [kr,kc] = k.split(',').map(Number); return kr < r; }),
+                  x: cellX(c), z: cellZ(r) - cellSize/2 + 0.62, faceRot: 0 },
+                { check: !conns.some(k => { const [kr,kc] = k.split(',').map(Number); return kr > r; }),
+                  x: cellX(c), z: cellZ(r) + cellSize/2 - 0.62, faceRot: Math.PI },
+                { check: !conns.some(k => { const [kr,kc] = k.split(',').map(Number); return kc < c; }),
+                  x: cellX(c) - cellSize/2 + 0.62, z: cellZ(r), faceRot: Math.PI/2 },
+                { check: !conns.some(k => { const [kr,kc] = k.split(',').map(Number); return kc > c; }),
+                  x: cellX(c) + cellSize/2 - 0.62, z: cellZ(r), faceRot: -Math.PI/2 }
+            ].filter(d => d.check);
+
+            if (wallDirs.length === 0) continue;
+            const wd = wallDirs[Math.floor(Math.random() * wallDirs.length)];
+            const qd = criarQuadro(wd.x, 2.2 + Math.random() * 0.5, wd.z, wd.faceRot);
+            scene.add(qd);
+            objetosDinamicos.push(qd);
+            moveisArray.push({ mesh: qd, tipo: 'quadro' });
+        }
     }
 
     console.log(`[AURA] Mobiliário: ${moveisArray.length} peças geradas`);
@@ -1339,10 +1618,11 @@ function reconstruirMundo() {
     // ——— FASE 2A: MOBILIÁRIO ———
     gerarMoveis(grid, rooms, rows, cols, cellSize);
 
-    // ——— FASE 2D: PROJETORES ASYNC (1-2 em salas 3x3 sem cadeira gigante) ———
+    // ——— FASE 2D: PROJETORES ASYNC ———
+    const maxProj = parseInt(document.getElementById('chProjetores')?.value) || 2;
     let projCount = 0;
     for (const rm of rooms) {
-        if (rm.size !== 3 || rm.temCadeiraGigante || projCount >= 2) continue;
+        if (rm.size !== 3 || rm.temCadeiraGigante || projCount >= maxProj) continue;
         if (Math.random() > 0.5) continue;
         const px = cellX(rm.c) + (rm.size - 1) * cellSize * 0.25;
         const pz = cellZ(rm.r) - rm.size * cellSize * 0.4;
@@ -1351,7 +1631,9 @@ function reconstruirMundo() {
     }
 
     // ——— FASE 2D: ZONAS DE FALHA INFINITA ———
-    gerarZonasDeFalha(rows, cols, cellSize);
+    if (document.getElementById('chZonaFalha')?.checked !== false) {
+        gerarZonasDeFalha(rows, cols, cellSize);
+    }
 
     // ——— LUMINÁRIAS (uma por célula) ———
     for (let r = 0; r < rows; r++) {
@@ -1507,6 +1789,39 @@ function init3D() {
     document.getElementById('luzLum').addEventListener('input', e => baseLightIntensity = parseFloat(e.target.value));
     document.getElementById('vhsSlider').addEventListener('input', e => {
         document.getElementById('vhs-overlay').style.opacity = e.target.value;
+    });
+
+    // === PAINEL DEV — BOTÕES DE DEBUG (FASE 2) ===
+    document.getElementById('btn-spawnWire').addEventListener('click', () => {
+        if (entidadeWire && entidadeWire.active) {
+            scene.remove(entidadeWire.group); entidadeWire = null;
+        }
+        spawnWire();
+    });
+    document.getElementById('btn-spawnObs').addEventListener('click', () => {
+        if (observador && observador.active) {
+            scene.remove(observador.group); observador = null;
+        }
+        spawnObservador();
+    });
+    document.getElementById('btn-resetStress').addEventListener('click', () => {
+        stressLevel = 0;
+        renderer.domElement.style.transform = '';
+        camera.fov = 75; camera.updateProjectionMatrix();
+    });
+    document.getElementById('btn-resetCo2').addEventListener('click', () => {
+        co2Nivel = 0.041;
+        faseAlarme = 'normal';
+        document.getElementById('co2-display').style.color = '#6b612c';
+        document.getElementById('co2-display').style.opacity = '1';
+        document.getElementById('alerta-contencao').style.display = 'none';
+        scene.fog.color.set('#2b2713'); scene.background.set('#2b2713');
+        for (let i = 0; i < poolDeLuzesReais.length; i++) poolDeLuzesReais[i].light.color.set(0xffffcc);
+    });
+
+    // Wire speed live
+    document.getElementById('wireSpeed').addEventListener('input', e => {
+        if (entidadeWire && entidadeWire.active) entidadeWire.spd = parseFloat(e.target.value);
     });
 
     // === INICIAR GAME LOOP ===
@@ -2104,6 +2419,38 @@ function animate() {
                 scene.fog.density = parseFloat(document.getElementById('fogDensity').value);
             }
         }
+    }
+
+    // === MONITOR AO VIVO (a cada 30 frames, só se painel visível) ===
+    if (frameCount % 30 === 0 && painelDev.style.display !== 'none') {
+        const monS = document.getElementById('mon-stress');
+        const monC = document.getElementById('mon-co2');
+        const monW = document.getElementById('mon-wire');
+        const monO = document.getElementById('mon-obs');
+        const monA = document.getElementById('mon-alarme');
+        const monM = document.getElementById('mon-moveis');
+        const monWa = document.getElementById('mon-walls');
+        const monF = document.getElementById('mon-fps');
+
+        if (monS) monS.innerText = stressLevel.toFixed(2);
+        if (monC) monC.innerText = co2Nivel.toFixed(4);
+        if (monW) {
+            const wAtivo = entidadeWire && entidadeWire.active;
+            monW.innerText = wAtivo ? 'ATIVO' : 'INATIVO';
+            monW.style.color = wAtivo ? '#66ff66' : '#ff4444';
+        }
+        if (monO) {
+            const oAtivo = observador && observador.active;
+            monO.innerText = oAtivo ? 'ATIVO' : 'INATIVO';
+            monO.style.color = oAtivo ? '#66ff66' : '#ff4444';
+        }
+        if (monA) {
+            monA.innerText = faseAlarme.toUpperCase();
+            monA.style.color = faseAlarme === 'vermelho' ? '#ff2222' : faseAlarme === 'amarelo' ? '#ffaa00' : '#6b612c';
+        }
+        if (monM) monM.innerText = moveisArray.length;
+        if (monWa) monWa.innerText = wallBoxes.length;
+        if (monF) monF.innerText = Math.round(1 / Math.max(delta, 0.001));
     }
 
     prevTime = time;
