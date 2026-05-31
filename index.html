@@ -2708,7 +2708,7 @@ function animate() {
     const time = performance.now();
     const delta = Math.min((time - prevTime) / 1000, 0.1); // Clamp pra evitar teleporte no 1o frame
 
-    if (controls && controls.isLocked) {
+    if ((controls && controls.isLocked) || isMobile) {
         const posAnterior = camera.position.clone();
 
         // Direção da câmera (sempre atualizada, sem depender de matrix stale)
