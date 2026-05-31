@@ -8,6 +8,46 @@
         body { margin:0; overflow:hidden; background:#141205; font-family:monospace; user-select:none; touch-action:none; }
         @keyframes piscar { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
+        /* Mobile: forçar landscape */
+        @media screen and (orientation: portrait) {
+            #rotate-overlay { display:flex !important; }
+        }
+        #rotate-overlay {
+            display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+            background:rgba(0,0,0,0.95); z-index:9999; flex-direction:column;
+            align-items:center; justify-content:center; color:#d1c78b; font-family:monospace;
+        }
+        #rotate-overlay span { font-size:3rem; margin-bottom:10px; }
+        #rotate-overlay p { font-size:1rem; opacity:0.7; }
+
+        /* Joystick virtual mobile */
+        #mobile-joystick {
+            display:none; position:fixed; bottom:30px; left:30px; width:120px; height:120px;
+            z-index:300; border-radius:50%; background:rgba(60,55,30,0.4);
+            border:2px solid rgba(209,199,139,0.3); touch-action:none;
+        }
+        #joystick-knob {
+            position:absolute; width:50px; height:50px; border-radius:50%;
+            background:rgba(209,199,139,0.5); top:35px; left:35px;
+            pointer-events:none; transition: none;
+        }
+        /* Botão E (interagir) mobile */
+        #mobile-interact {
+            display:none; position:fixed; bottom:40px; right:40px; width:70px; height:70px;
+            z-index:300; border-radius:50%; background:rgba(180,50,50,0.5);
+            border:2px solid rgba(255,100,100,0.4); color:#fff; font-size:1.5rem;
+            font-weight:bold; font-family:monospace; cursor:pointer;
+            line-height:70px; text-align:center;
+        }
+        #mobile-interact:active { background:rgba(255,80,80,0.7); }
+        /* Botão pular mobile */
+        #mobile-jump {
+            display:none; position:fixed; bottom:130px; right:40px; width:55px; height:55px;
+            z-index:300; border-radius:50%; background:rgba(60,60,120,0.4);
+            border:2px solid rgba(100,100,200,0.3); color:#aaa; font-size:0.7rem;
+            font-family:monospace; cursor:pointer; line-height:55px; text-align:center;
+        }
+
         #vhs-overlay {
             position:absolute; top:0; left:0; width:100%; height:100%;
             background: linear-gradient(rgba(18,16,16,0) 50%, rgba(0,0,0,0.28) 50%),
@@ -343,6 +383,15 @@
     </div>
 </div>
 
+<!-- MOBILE: rotate overlay + joystick + buttons -->
+<div id="rotate-overlay">
+    <span>📱↔️</span>
+    <p>Gire o celular para jogar</p>
+</div>
+<div id="mobile-joystick"><div id="joystick-knob"></div></div>
+<div id="mobile-interact">E</div>
+<div id="mobile-jump">⬆</div>
+
 <script>
 // ══════════════════════════════════════════════════════════════
 // SEÇÃO 1 — TEXTURAS PROCEDURAIS
@@ -424,6 +473,7 @@ let modoDevAtivo = false;
 let wallBoxes = [];
 let objetosDinamicos = [];
 let portasEscuras = [];
+let portasInterativas = [];
 
 // Noclip / Fly (L)
 let noclipAtivo = false;
@@ -849,8 +899,9 @@ function criarQuadro(x, y, z, faceRot) {
     return g;
 }
 
-function gerarMoveis(grid, rooms, rows, cols, cellSize) {
-    moveisArray = [];
+function gerarMoveis(grid, rooms, rows, cols, cellSize, yOff) {
+    if (!yOff) yOff = 0;
+    const moveisStartIdx = moveisArray.length; // Pra offset depois
 
     const cellX = (c) => c * cellSize - MAP_SIZE + cellSize / 2;
     const cellZ = (r) => r * cellSize - MAP_SIZE + cellSize / 2;
@@ -1203,6 +1254,18 @@ function gerarMoveis(grid, rooms, rows, cols, cellSize) {
             scene.add(rel);
             objetosDinamicos.push(rel);
             moveisArray.push({ mesh: rel, tipo: 'anomalia_relogio' });
+        }
+    }
+
+    // Offset vertical pra andares superiores
+    if (yOff > 0) {
+        for (let i = moveisStartIdx; i < moveisArray.length; i++) {
+            const m = moveisArray[i];
+            if (m.mesh) m.mesh.position.y += yOff;
+            if (m.box) {
+                m.box.min.y += yOff;
+                m.box.max.y += yOff;
+            }
         }
     }
 
@@ -1757,8 +1820,8 @@ function reconstruirMundo() {
     const geoLintelH = new THREE.BoxGeometry(DOOR_WIDTH, lintelH, thick);
     const geoLintelV = new THREE.BoxGeometry(thick, lintelH, DOOR_WIDTH);
     const geoPost    = new THREE.BoxGeometry(0.12, DOOR_HEIGHT, 0.12);
-    const geoDoorH   = new THREE.PlaneGeometry(DOOR_WIDTH - 0.06, DOOR_HEIGHT - 0.06);
-    const geoDoorV   = new THREE.PlaneGeometry(DOOR_WIDTH - 0.06, DOOR_HEIGHT - 0.06);
+    const geoDoorH   = new THREE.BoxGeometry(DOOR_WIDTH - 0.06, DOOR_HEIGHT - 0.06, 0.06);
+    const geoDoorV   = new THREE.BoxGeometry(DOOR_WIDTH - 0.06, DOOR_HEIGHT - 0.06, 0.06);
     const geoLuz     = new THREE.PlaneGeometry(2.8, 0.7);
 
     // Helper: adicionar mesh à cena
@@ -1903,7 +1966,8 @@ function reconstruirMundo() {
     }
 
     // ——— FASE 2A: MOBILIÁRIO ———
-    gerarMoveis(grid, rooms, rows, cols, cellSize);
+    moveisArray = [];
+    gerarMoveis(grid, rooms, rows, cols, cellSize, 0);
 
     // ——— FASE 2D: PROJETORES ASYNC ———
     const maxProj = parseInt(document.getElementById('chProjetores')?.value) || 2;
@@ -1942,86 +2006,392 @@ function reconstruirMundo() {
     }
 
     // ═══════════════════════════════════════════════
-    // ANDAR 1 (acima) — Segundo labirinto offset em Y
+    // ANDAR 1 (acima) — Cópia EXATA do andar 0
     // ═══════════════════════════════════════════════
     const grid2 = gerarLabirinto(rows, cols);
     limparSpawn(grid2, rows, cols);
-    const rooms2 = criarSalas(grid2, rows, cols, Math.max(3, Math.floor(rows * cols / 50)));
-    abrirExtras(grid2, rows, cols, extraOpen * 0.8); // Mais fechado em cima
+    const rooms2 = criarSalas(grid2, rows, cols, Math.max(4, Math.floor(rows * cols / 35)));
+    abrirExtras(grid2, rows, cols, extraOpen);
 
-    const yOffset = FLOOR1_BASE; // 4.15 — offset vertical pro andar 1
+    const yOff = FLOOR1_BASE;
+    const hWalls2 = new Set();
+    const vWalls2 = new Set();
 
-    // Geometrias do andar 1 (mesmas dimensões)
-    const geoWallH2  = new THREE.BoxGeometry(cellSize, WALL_HEIGHT, thick);
-    const geoWallV2  = new THREE.BoxGeometry(thick, WALL_HEIGHT, cellSize);
+    // isInRoom pra grid2
+    function isInRoom2(r, c) {
+        for (const rm of rooms2) {
+            if (r >= rm.r && r < rm.r + rm.size && c >= rm.c && c < rm.c + rm.size) return true;
+        }
+        return false;
+    }
 
-    // Paredes horizontais do andar 1
+    // ——— PAREDES HORIZONTAIS ANDAR 1 ———
     for (let r = 0; r < rows - 1; r++) {
         for (let c = 0; c < cols; c++) {
             const connected = grid2[r][c].conn[(r + 1) + ',' + c];
-            if (!connected && !isSpawnEdge(r, c, r + 1, c)) {
-                const wx = cellX(c);
-                const wz = edgeZ(r + 1);
-                addWall(geoWallH2, matParede, wx, yOffset + WALL_HEIGHT / 2, wz);
+            const wx = cellX(c);
+            const wz = edgeZ(r + 1);
+
+            if (!connected) {
+                if (!isSpawnEdge(r, c, r + 1, c)) {
+                    addWall(geoWallH, matParede, wx, yOff + WALL_HEIGHT / 2, wz);
+                    hWalls2.add((r + 1) + ',' + c);
+                }
+            } else if (isSpawnEdge(r, c, r + 1, c)) {
+                // spawn limpo
+            } else {
+                const nearRoom = isInRoom2(r, c) || isInRoom2(r + 1, c);
+                const chanceDoor = nearRoom ? Math.min(pDoor * 2.5, 0.85) : pDoor;
+                const roll = Math.random();
+
+                if (roll < chanceDoor + pDark) {
+                    const isDark = roll >= chanceDoor;
+                    hWalls2.add((r + 1) + ',' + c);
+
+                    addWall(geoSideH, matParede,
+                        wx - cellSize / 2 + sideWidth / 2, yOff + WALL_HEIGHT / 2, wz);
+                    addWall(geoSideH, matParede,
+                        wx + cellSize / 2 - sideWidth / 2, yOff + WALL_HEIGHT / 2, wz);
+                    add(geoLintelH, matParede, wx, yOff + DOOR_HEIGHT + lintelH / 2, wz);
+                    add(geoPost, matFrame, wx - DOOR_WIDTH / 2, yOff + DOOR_HEIGHT / 2, wz);
+                    add(geoPost, matFrame, wx + DOOR_WIDTH / 2, yOff + DOOR_HEIGHT / 2, wz);
+
+                    if (isDark) {
+                        const darkMat = matPortaEscuraBase.clone();
+                        const dm = add(geoDoorH, darkMat, wx, yOff + DOOR_HEIGHT / 2, wz);
+                        portasEscuras.push({ x: wx, z: wz, mesh: dm });
+                    }
+                }
             }
         }
     }
 
-    // Paredes verticais do andar 1
+    // ——— PAREDES VERTICAIS ANDAR 1 ———
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols - 1; c++) {
             const connected = grid2[r][c].conn[r + ',' + (c + 1)];
-            if (!connected && !isSpawnEdge(r, c, r, c + 1)) {
-                const wx = edgeX(c + 1);
-                const wz = cellZ(r);
-                addWall(geoWallV2, matParede, wx, yOffset + WALL_HEIGHT / 2, wz);
+            const wx = edgeX(c + 1);
+            const wz = cellZ(r);
+
+            if (!connected) {
+                if (!isSpawnEdge(r, c, r, c + 1)) {
+                    addWall(geoWallV, matParede, wx, yOff + WALL_HEIGHT / 2, wz);
+                    vWalls2.add(r + ',' + (c + 1));
+                }
+            } else if (isSpawnEdge(r, c, r, c + 1)) {
+                // spawn limpo
+            } else {
+                const nearRoom = isInRoom2(r, c) || isInRoom2(r, c + 1);
+                const chanceDoor = nearRoom ? Math.min(pDoor * 2.5, 0.85) : pDoor;
+                const roll = Math.random();
+
+                if (roll < chanceDoor + pDark) {
+                    const isDark = roll >= chanceDoor;
+                    vWalls2.add(r + ',' + (c + 1));
+
+                    addWall(geoSideV, matParede,
+                        wx, yOff + WALL_HEIGHT / 2, wz - cellSize / 2 + sideWidth / 2);
+                    addWall(geoSideV, matParede,
+                        wx, yOff + WALL_HEIGHT / 2, wz + cellSize / 2 - sideWidth / 2);
+                    add(geoLintelV, matParede, wx, yOff + DOOR_HEIGHT + lintelH / 2, wz);
+                    add(geoPost, matFrame, wx, yOff + DOOR_HEIGHT / 2, wz - DOOR_WIDTH / 2);
+                    add(geoPost, matFrame, wx, yOff + DOOR_HEIGHT / 2, wz + DOOR_WIDTH / 2);
+
+                    if (isDark) {
+                        const darkMat = matPortaEscuraBase.clone();
+                        const dm = add(geoDoorV, darkMat, wx, yOff + DOOR_HEIGHT / 2, wz, Math.PI / 2);
+                        portasEscuras.push({ x: wx, z: wz, mesh: dm });
+                    }
+                }
             }
         }
     }
 
-    // Bordas externas do andar 1
+    // ——— BORDAS ANDAR 1 ———
     for (let c = 0; c < cols; c++) {
-        addWall(geoWallH2, matParede, cellX(c), yOffset + WALL_HEIGHT / 2, edgeZ(0));
-        addWall(geoWallH2, matParede, cellX(c), yOffset + WALL_HEIGHT / 2, edgeZ(rows));
+        addWall(geoWallH, matParede, cellX(c), yOff + WALL_HEIGHT / 2, -MAP_SIZE);
+        addWall(geoWallH, matParede, cellX(c), yOff + WALL_HEIGHT / 2, rows * cellSize - MAP_SIZE);
+        hWalls2.add('0,' + c); hWalls2.add(rows + ',' + c);
     }
     for (let r = 0; r < rows; r++) {
-        addWall(geoWallV2, matParede, edgeX(0), yOffset + WALL_HEIGHT / 2, cellZ(r));
-        addWall(geoWallV2, matParede, edgeX(cols), yOffset + WALL_HEIGHT / 2, cellZ(r));
+        addWall(geoWallV, matParede, -MAP_SIZE, yOff + WALL_HEIGHT / 2, cellZ(r));
+        addWall(geoWallV, matParede, cols * cellSize - MAP_SIZE, yOff + WALL_HEIGHT / 2, cellZ(r));
+        vWalls2.add(r + ',0'); vWalls2.add(r + ',' + cols);
     }
 
-    // Luminárias do andar 1 (mais escassas — 40% chance)
+    // ——— CORNER FILLS ANDAR 1 ———
+    for (let ri = 0; ri <= rows; ri++) {
+        for (let ci = 0; ci <= cols; ci++) {
+            const hasH = (ci > 0 && hWalls2.has(ri + ',' + (ci - 1))) || (ci < cols && hWalls2.has(ri + ',' + ci));
+            const hasV = (ri > 0 && vWalls2.has((ri - 1) + ',' + ci)) || (ri < rows && vWalls2.has(ri + ',' + ci));
+            if (hasH && hasV) {
+                add(geoCorner, matParede, edgeX(ci), yOff + WALL_HEIGHT / 2, edgeZ(ri));
+            }
+        }
+    }
+
+    // ——— LUMINÁRIAS ANDAR 1 (uma por célula, igual ao andar 0) ———
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-            if (Math.random() > 0.4) continue;
-            const matPlaca2 = new THREE.MeshBasicMaterial({ color: 0xccccaa, side: THREE.DoubleSide });
-            const placa2 = add(geoLuz, matPlaca2, cellX(c), yOffset + 3.98, cellZ(r));
+            const matPlaca2 = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+            const placa2 = add(geoLuz, matPlaca2, cellX(c), yOff + 3.98, cellZ(r));
             placa2.rotation.x = Math.PI / 2;
             todasAsLuminarias.push({
                 x: cellX(c), z: cellZ(r), mesh: placa2,
-                quebrada: Math.random() > 0.7
+                quebrada: Math.random() > 0.87
             });
         }
     }
 
+    // ——— MOBILIÁRIO ANDAR 1 ———
+    gerarMoveis(grid2, rooms2, rows, cols, cellSize, yOff);
+
+    // === PORTAS MARRONS + MAÇANETA + ABERTURA INTERATIVA ===
+    const matPortaMarrom = new THREE.MeshStandardMaterial({
+        color: 0x3a2a1a, roughness: 0.7, metalness: 0.1,
+        side: THREE.DoubleSide
+    });
+    const matMacaneta = new THREE.MeshStandardMaterial({
+        color: 0x8a7a50, roughness: 0.3, metalness: 0.7
+    });
+    const geoMacanetaBola = new THREE.SphereGeometry(0.05, 8, 6);
+    const geoMacanetaHaste = new THREE.CylinderGeometry(0.015, 0.015, 0.1, 6);
+    const geoFrameTop = new THREE.BoxGeometry(DOOR_WIDTH + 0.12, 0.12, 0.12);
+
+    portasInterativas = []; // reset
+
+    for (let pi = 0; pi < portasEscuras.length; pi++) {
+        const pd = portasEscuras[pi];
+        if (!pd.mesh) continue;
+        pd.mesh.material = matPortaMarrom;
+
+        const doorPos = pd.mesh.position.clone();
+        const doorRot = pd.mesh.rotation.y || 0;
+        const isVertical = Math.abs(doorRot) > 0.5; // porta no eixo Z
+
+        // === CABEÇALHO DO BATENTE (barra escura em cima conectando os postes) ===
+        const frameTop = new THREE.Mesh(geoFrameTop, matFrame);
+        frameTop.position.set(doorPos.x, doorPos.y + DOOR_HEIGHT / 2, doorPos.z);
+        frameTop.rotation.y = doorRot;
+        scene.add(frameTop);
+        objetosDinamicos.push(frameTop);
+
+        // === MAÇANETA (altura real: ~1m do chão) ===
+        const knobY = doorPos.y - (DOOR_HEIGHT / 2) + 1.0; // 1m acima do chão
+        const knobSideOffset = DOOR_WIDTH / 2 - 0.2; // perto da borda
+
+        // Calcular offsets baseado na rotação da porta
+        const knobLocalX = isVertical ? 0 : knobSideOffset;
+        const knobLocalZ = isVertical ? knobSideOffset : 0;
+        const normalX = isVertical ? 0.06 : 0;
+        const normalZ = isVertical ? 0 : 0.06;
+
+        // Frente
+        const bola1 = new THREE.Mesh(geoMacanetaBola, matMacaneta);
+        bola1.position.set(doorPos.x + knobLocalX + normalX, knobY, doorPos.z + knobLocalZ + normalZ);
+        scene.add(bola1); objetosDinamicos.push(bola1);
+
+        // Trás
+        const bola2 = new THREE.Mesh(geoMacanetaBola, matMacaneta);
+        bola2.position.set(doorPos.x + knobLocalX - normalX, knobY, doorPos.z + knobLocalZ - normalZ);
+        scene.add(bola2); objetosDinamicos.push(bola2);
+
+        // === PORTAS ANOMALIA: 30% chance de ter 3-5 maçanetas extras em posições estranhas ===
+        if (Math.random() < 0.3) {
+            const extraCount = 3 + Math.floor(Math.random() * 3); // 3-5
+            for (let e = 0; e < extraCount; e++) {
+                const ex = doorPos.x + (Math.random() - 0.5) * (DOOR_WIDTH - 0.3);
+                const ey = doorPos.y - DOOR_HEIGHT / 2 + 0.3 + Math.random() * (DOOR_HEIGHT - 0.6);
+                const ez = doorPos.z + (Math.random() - 0.5) * 0.15;
+                const extraBola = new THREE.Mesh(geoMacanetaBola, matMacaneta);
+                extraBola.position.set(ex, ey, ez);
+                extraBola.scale.setScalar(0.6 + Math.random() * 0.8);
+                scene.add(extraBola); objetosDinamicos.push(extraBola);
+            }
+        }
+
+        // === PORTA INTERATIVA: 70% abrem/fecham, 20% dessas são trancadas ===
+        const interativa = Math.random() < 0.7;
+        const trancada = interativa && Math.random() < 0.2;
+
+        if (interativa) {
+            // Criar grupo pivot (dobradiça) pra rotação
+            const pivot = new THREE.Group();
+            // Pivot na borda esquerda da porta
+            if (isVertical) {
+                pivot.position.set(doorPos.x, doorPos.y, doorPos.z - DOOR_WIDTH / 2);
+            } else {
+                pivot.position.set(doorPos.x - DOOR_WIDTH / 2, doorPos.y, doorPos.z);
+            }
+            scene.add(pivot);
+            objetosDinamicos.push(pivot);
+
+            // Reparentar a porta pro pivot
+            scene.remove(pd.mesh);
+            pd.mesh.position.set(0, 0, 0);
+            if (isVertical) {
+                pd.mesh.position.z = DOOR_WIDTH / 2;
+            } else {
+                pd.mesh.position.x = DOOR_WIDTH / 2;
+            }
+            pivot.add(pd.mesh);
+
+            portasInterativas.push({
+                pivot: pivot,
+                x: doorPos.x,  // Centro da porta (não a dobradiça)
+                y: doorPos.y,
+                z: doorPos.z,
+                aberta: false,
+                anguloAlvo: 0,
+                anguloAtual: 0,
+                trancada: trancada,
+                isVertical: isVertical
+            });
+        }
+
+        // Portas marrons NÃO teleportam
+        pd.teleportaAndar = false;
+    }
+
+    // === PORTAS VERMELHAS "EXIT" — SÓ ESSAS TELEPORTAM ENTRE ANDARES ===
+    // Textura EXIT na superfície da porta
+    const exitDoorCanvas = document.createElement('canvas');
+    exitDoorCanvas.width = 256; exitDoorCanvas.height = 512;
+    const edCtx = exitDoorCanvas.getContext('2d');
+    edCtx.fillStyle = '#8b1a1a';
+    edCtx.fillRect(0, 0, 256, 512);
+    // Borda da porta
+    edCtx.strokeStyle = '#6b0000';
+    edCtx.lineWidth = 8;
+    edCtx.strokeRect(8, 8, 240, 496);
+    // Placa EXIT
+    edCtx.fillStyle = '#ffffff';
+    edCtx.fillRect(50, 120, 156, 80);
+    edCtx.fillStyle = '#cc0000';
+    edCtx.font = 'bold 52px Arial';
+    edCtx.textAlign = 'center';
+    edCtx.textBaseline = 'middle';
+    edCtx.fillText('EXIT', 128, 160);
+    // Ícone correndo (simplificado)
+    edCtx.fillStyle = '#cc0000';
+    edCtx.font = '28px Arial';
+    edCtx.fillText('🏃 →', 128, 135);
+    const exitDoorTexture = new THREE.CanvasTexture(exitDoorCanvas);
+
+    const matPortaVermelha = new THREE.MeshStandardMaterial({
+        map: exitDoorTexture, roughness: 0.4, metalness: 0.15,
+        emissive: 0x330000, emissiveIntensity: 0.2
+    });
+    const matPortaVermelhaBack = new THREE.MeshStandardMaterial({
+        color: 0x6b0000, roughness: 0.5, metalness: 0.1
+    });
+    const matMacanetaPreta = new THREE.MeshStandardMaterial({
+        color: 0x1a1a1a, roughness: 0.3, metalness: 0.8
+    });
+    const geoExitDoor = new THREE.BoxGeometry(DOOR_WIDTH - 0.06, DOOR_HEIGHT - 0.06, 0.08);
+    const geoKnobBola = new THREE.SphereGeometry(0.04, 8, 6);
+    const geoKnobHaste = new THREE.CylinderGeometry(0.015, 0.015, 0.15, 6);
+
+    const allRooms = [...rooms, ...rooms2];
+    const exitRooms = allRooms.filter(rm => rm.size >= 2).sort(() => Math.random() - 0.5).slice(0, 3);
+
+    for (const rm of exitRooms) {
+        const isFloor1 = rooms2.includes(rm);
+        const yBase = isFloor1 ? FLOOR1_BASE : 0;
+        const ex = cellX(rm.c) + (Math.random() - 0.5) * cellSize * 0.3;
+        const ez = cellZ(rm.r) + (Math.random() - 0.5) * cellSize * 0.3;
+        const rotD = Math.random() > 0.5 ? 0 : Math.PI / 2;
+
+        // Porta vermelha 3D (com espessura)
+        const exitDoor = new THREE.Mesh(geoExitDoor, [
+            matPortaVermelhaBack, matPortaVermelhaBack, // sides
+            matPortaVermelhaBack, matPortaVermelhaBack, // top/bottom
+            matPortaVermelha, matPortaVermelhaBack       // front (EXIT) / back
+        ]);
+        exitDoor.position.set(ex, yBase + DOOR_HEIGHT / 2, ez);
+        exitDoor.rotation.y = rotD;
+        scene.add(exitDoor);
+        objetosDinamicos.push(exitDoor);
+
+        // Maçaneta preta (dos dois lados)
+        const knobY = yBase + 1.0;
+        const cosR = Math.cos(rotD);
+        const sinR = Math.sin(rotD);
+        const knobSide = DOOR_WIDTH / 2 - 0.2;
+
+        for (const side of [1, -1]) {
+            const bola = new THREE.Mesh(geoKnobBola, matMacanetaPreta);
+            bola.position.set(
+                ex + cosR * knobSide + sinR * (0.06 * side),
+                knobY,
+                ez - sinR * knobSide + cosR * (0.06 * side)
+            );
+            scene.add(bola); objetosDinamicos.push(bola);
+
+            const haste = new THREE.Mesh(geoKnobHaste, matMacanetaPreta);
+            haste.position.copy(bola.position);
+            haste.position.y -= 0.02;
+            haste.rotation.z = Math.PI / 2;
+            haste.rotation.y = rotD;
+            scene.add(haste); objetosDinamicos.push(haste);
+        }
+
+        // Frame completo
+        add(geoPost, matFrame, ex + cosR * (-DOOR_WIDTH / 2), yBase + DOOR_HEIGHT / 2, ez - sinR * (-DOOR_WIDTH / 2));
+        add(geoPost, matFrame, ex + cosR * (DOOR_WIDTH / 2), yBase + DOOR_HEIGHT / 2, ez - sinR * (DOOR_WIDTH / 2));
+        const ftop = new THREE.Mesh(geoFrameTop, matFrame);
+        ftop.position.set(ex, yBase + DOOR_HEIGHT, ez);
+        ftop.rotation.y = rotD;
+        scene.add(ftop); objetosDinamicos.push(ftop);
+
+        // Luz vermelha fraca
+        const luzExit = new THREE.PointLight(0xff0000, 0.6, 6, 2);
+        luzExit.position.set(ex, yBase + 2, ez);
+        scene.add(luzExit); objetosDinamicos.push(luzExit);
+
+        // Registrar como porta que teleporta
+        portasEscuras.push({ x: ex, z: ez, mesh: exitDoor, teleportaAndar: true });
+
+        // === ANOMALIA: 30% chance de porta EXIT invertida no teto ===
+        if (Math.random() < 0.3) {
+            const ceilingY = yBase + WALL_HEIGHT;
+            const ceilingDoor = new THREE.Mesh(geoExitDoor, matPortaVermelha.clone());
+            ceilingDoor.position.set(
+                ex + (Math.random() - 0.5) * 4,
+                ceilingY - DOOR_HEIGHT / 2,
+                ez + (Math.random() - 0.5) * 4
+            );
+            ceilingDoor.rotation.y = rotD + (Math.random() - 0.5) * 0.5;
+            ceilingDoor.rotation.z = Math.PI; // de cabeça pra baixo
+            scene.add(ceilingDoor);
+            objetosDinamicos.push(ceilingDoor);
+
+            // Frame invertido no teto
+            const ftopCeil = new THREE.Mesh(geoFrameTop, matFrame);
+            ftopCeil.position.set(ceilingDoor.position.x, ceilingY - DOOR_HEIGHT, ceilingDoor.position.z);
+            ftopCeil.rotation.y = ceilingDoor.rotation.y;
+            scene.add(ftopCeil); objetosDinamicos.push(ftopCeil);
+        }
+    }
+
     // === ESCADAS (buracos no teto/chão que conectam andares) ===
-    // Escolher 3 salas aleatórias pra ter escadas
     escadasRef = [];
     const salasEscada = rooms.filter(rm => rm.size >= 2).sort(() => Math.random() - 0.5).slice(0, 3);
     for (const rm of salasEscada) {
         const sx = cellX(rm.c);
         const sz = cellZ(rm.r);
 
-        // Rampa visual (caixa inclinada)
+        // Rampa visual
         const rampa = new THREE.Mesh(
             new THREE.BoxGeometry(2.5, 0.15, 4.5),
             new THREE.MeshStandardMaterial({ color: 0x4a4228, roughness: 0.8 })
         );
         rampa.position.set(sx, WALL_HEIGHT / 2, sz);
-        rampa.rotation.x = -Math.PI / 6; // ~30 graus de inclinação
+        rampa.rotation.x = -Math.PI / 6;
         scene.add(rampa);
         objetosDinamicos.push(rampa);
 
-        // Marcador visual (borda brilhante ao redor do buraco)
+        // Marcador visual
         const marcador = new THREE.Mesh(
             new THREE.RingGeometry(1.0, 1.5, 8),
             new THREE.MeshBasicMaterial({ color: 0xffdd44, side: THREE.DoubleSide, transparent: true, opacity: 0.3 })
@@ -2031,11 +2401,10 @@ function reconstruirMundo() {
         scene.add(marcador);
         objetosDinamicos.push(marcador);
 
-        // Guardar posição da escada pra detecção no animate
         escadasRef.push({ x: sx, z: sz, radius: 1.8 });
     }
 
-    console.log(`[AURA] Mundo reconstruído: ${rows}x${cols} cells, ${wallBoxes.length} walls, ${portasEscuras.length} dark doors, ${todasAsLuminarias.length} lights, ${escadasRef.length} escadas, 2 andares`);
+    console.log(`[AURA] Mundo reconstruído: ${rows}x${cols} cells, ${wallBoxes.length} walls, ${portasEscuras.length} portas marrons, ${todasAsLuminarias.length} lights, ${escadasRef.length} escadas, 2 andares`);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2568,7 +2937,7 @@ function animate() {
             if (biquadFilter) biquadFilter.frequency.setValueAtTime(350, audioCtx.currentTime);
         }
 
-        // ——— PORTAS ESCURAS: PROXIMIDADE ———
+        // ——— PORTAS: PROXIMIDADE (só EXIT vermelhas ativam efeitos) ———
         let pertoDePortaEscura = false;
         let menorDistPorta = 999;
 
@@ -2577,15 +2946,17 @@ function animate() {
             const dz = camera.position.z - porta.z;
             const dist = Math.sqrt(dx * dx + dz * dz);
 
-            if (dist < 8) {
+            if (dist < 8 && porta.teleportaAndar) {
                 pertoDePortaEscura = true;
                 if (dist < menorDistPorta) menorDistPorta = dist;
 
-                // Pulso emissivo
+                // Pulso emissivo vermelho (só EXIT)
                 const pulse = 0.3 + Math.sin(time * 0.003) * 0.25;
-                porta.mesh.material.emissive.setRGB(pulse * 0.18, pulse * 0.03, pulse * 0.03);
-            } else {
-                porta.mesh.material.emissive.setHex(0x0a0400);
+                const mats = Array.isArray(porta.mesh.material) ? porta.mesh.material : [porta.mesh.material];
+                for (const m of mats) { if (m.emissive) m.emissive.setRGB(pulse * 0.3, pulse * 0.02, pulse * 0.02); }
+            } else if (porta.teleportaAndar) {
+                const mats = Array.isArray(porta.mesh.material) ? porta.mesh.material : [porta.mesh.material];
+                for (const m of mats) { if (m.emissive) m.emissive.setRGB(0.15, 0, 0); }
             }
         }
 
@@ -2602,21 +2973,52 @@ function animate() {
             if (biquadFilter) biquadFilter.frequency.setValueAtTime(180, audioCtx.currentTime);
         }
 
-        // ——— NOCLIP: INTERAÇÃO COM PORTA ESCURA ———
+        // ——— INTERAÇÃO COM PORTA INTERATIVA (E = abrir/fechar) ———
+        if (interactPressed) {
+            let portaMaisProxima = null;
+            let menorDistPI = Infinity;
+            for (const pi of portasInterativas) {
+                const dx = camera.position.x - pi.x;
+                const dz = camera.position.z - pi.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist < menorDistPI) {
+                    menorDistPI = dist;
+                    portaMaisProxima = pi;
+                }
+            }
+
+            if (portaMaisProxima && menorDistPI < 3.5) {
+                interactPressed = false;
+                if (portaMaisProxima.trancada) {
+                    // Porta trancada — feedback visual
+                    const prompt = document.getElementById('prompt-porta');
+                    prompt.innerHTML = '🔒 TRANCADA';
+                    prompt.style.opacity = '1';
+                    setTimeout(() => { prompt.style.opacity = '0'; }, 1500);
+                } else {
+                    portaMaisProxima.aberta = !portaMaisProxima.aberta;
+                    portaMaisProxima.anguloAlvo = portaMaisProxima.aberta ? Math.PI / 2 : 0;
+                }
+            }
+        }
+
+        // ——— ANIMAÇÃO DAS PORTAS (rotação suave) ———
+        for (const pi of portasInterativas) {
+            if (Math.abs(pi.anguloAtual - pi.anguloAlvo) > 0.01) {
+                pi.anguloAtual += (pi.anguloAlvo - pi.anguloAtual) * 0.08;
+                pi.pivot.rotation.y = pi.anguloAtual;
+            }
+        }
+
+        // ——— NOCLIP: INTERAÇÃO COM PORTA ESCURA (teleporta entre andares) ———
         if (noclipCooldown > 0) noclipCooldown -= delta;
         if (interactPressed && pertoDePortaEscura && menorDistPorta < 3.5 && noclipCooldown <= 0) {
             noclipCooldown = 4.0;
             interactPressed = false;
 
-            // Calcular destino aleatório (célula longe do jogador)
-            const cs = parseInt(document.getElementById('cellSize').value);
-            const rws = Math.floor(2 * MAP_SIZE / cs);
-            let tX, tZ, attempts = 0;
-            do {
-                tX = Math.floor(Math.random() * rws) * cs - MAP_SIZE + cs / 2;
-                tZ = Math.floor(Math.random() * rws) * cs - MAP_SIZE + cs / 2;
-                attempts++;
-            } while (attempts < 80 && Math.sqrt((tX - camera.position.x)**2 + (tZ - camera.position.z)**2) < 60);
+            // Alternar entre andares
+            const novoAndar = andarAtual === 0 ? 1 : 0;
+            const novaY = novoAndar === 0 ? 1.6 : (FLOOR1_BASE + 1.6);
 
             // FASE 1: Blackout + audio spike
             const noclipOv = document.getElementById('noclip-overlay');
@@ -2629,9 +3031,10 @@ function animate() {
             }
             document.getElementById('vhs-overlay').style.opacity = '1';
 
-            // FASE 2: Teleporte (após 600ms de escuridão)
+            // FASE 2: Teleporte pro outro andar (após 600ms)
             setTimeout(() => {
-                camera.position.set(tX, 1.6, tZ);
+                camera.position.y = novaY;
+                andarAtual = novoAndar;
                 velocity.set(0, 0, 0);
             }, 600);
 
