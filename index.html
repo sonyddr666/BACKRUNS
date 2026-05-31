@@ -159,6 +159,9 @@
         .btn-dev:hover { background:#d1c78b; color:#2b2713; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window);
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
 </head>
 <body>
@@ -2746,9 +2749,10 @@ function animate() {
                 Math.abs(w.x - posDesejada.x) < 16 && Math.abs(w.z - posDesejada.z) < 16
             );
 
-            // Adicionar portas interativas fechadas à lista de colisões
+            // Portas interativas dinâmicas (atualiza a caixa de colisão para a posição real da malha)
             for (const pi of portasInterativas) {
-                if (!pi.aberta && Math.abs(pi.x - posDesejada.x) < 16 && Math.abs(pi.z - posDesejada.z) < 16) {
+                if (Math.abs(pi.x - posDesejada.x) < 16 && Math.abs(pi.z - posDesejada.z) < 16) {
+                    pi.bbox.setFromObject(pi.doorGroup); // Recalcula a caixa perfeitamente!
                     proximas.push({ box: pi.bbox, x: pi.x, z: pi.z });
                 }
             }
@@ -3603,7 +3607,6 @@ function animate() {
 // ══════════════════════════════════════════════════════════════
 // SEÇÃO 8 — CONTROLES MOBILE
 // ══════════════════════════════════════════════════════════════
-const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window);
 if (isMobile) {
     document.getElementById('mobile-joystick').style.display = 'block';
     document.getElementById('mobile-interact').style.display = 'block';
