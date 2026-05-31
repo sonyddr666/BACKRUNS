@@ -2240,49 +2240,42 @@ function reconstruirMundo() {
             }
         }
 
-        // === PORTA INTERATIVA: 70% abrem/fecham ===
-        const interativa = Math.random() < 0.7;
-        const trancada = interativa && Math.random() < 0.2;
+        // === TODAS AS PORTAS SÃO INTERATIVAS (30% TRANCADAS) ===
+        const trancada = Math.random() < 0.3;
 
-        if (interativa) {
-            // Pivot na borda esquerda (dobradiça)
-            const pivot = new THREE.Group();
-            pivot.position.copy(doorPos);
-            pivot.rotation.y = doorRot;
-            scene.add(pivot);
-            objetosDinamicos.push(pivot);
+        // Calcular a bounding box ANTES de reparentar para o pivot para ter a caixa certa global
+        const bbox = new THREE.Box3().setFromObject(doorGroup);
 
-            // Mover doorGroup pra espaço local do pivot
-            doorGroup.position.set(0, 0, 0);
-            doorGroup.rotation.y = 0;
-            // Deslocar pro lado (porta gira pela borda esquerda)
-            doorGroup.position.x = DOOR_WIDTH / 2;
-            pivot.position.x -= Math.cos(doorRot) * (DOOR_WIDTH / 2);
-            pivot.position.z += Math.sin(doorRot) * (DOOR_WIDTH / 2);
+        // Pivot na borda esquerda (dobradiça)
+        const pivot = new THREE.Group();
+        pivot.position.copy(doorPos);
+        pivot.rotation.y = doorRot;
+        scene.add(pivot);
+        objetosDinamicos.push(pivot);
 
-            pivot.add(doorGroup);
+        // Mover doorGroup pra espaço local do pivot
+        doorGroup.position.set(0, 0, 0);
+        doorGroup.rotation.y = 0;
+        // Deslocar pro lado (porta gira pela borda esquerda)
+        doorGroup.position.x = DOOR_WIDTH / 2;
+        pivot.position.x -= Math.cos(doorRot) * (DOOR_WIDTH / 2);
+        pivot.position.z += Math.sin(doorRot) * (DOOR_WIDTH / 2);
 
-            portasInterativas.push({
-                pivot: pivot,
-                doorGroup: doorGroup,
-                x: doorPos.x,
-                y: doorPos.y,
-                z: doorPos.z,
-                aberta: false,
-                anguloAlvo: 0,
-                anguloAtual: 0,
-                trancada: trancada,
-                isVertical: isVertical
-            });
-        } else {
-            // Porta fixa — adicionar à scene
-            scene.add(doorGroup);
-            objetosDinamicos.push(doorGroup);
+        pivot.add(doorGroup);
 
-            // Colisão pra portas fixas
-            const bbox = new THREE.Box3().setFromObject(doorGroup);
-            wallBoxes.push({ box: bbox, x: doorPos.x, z: doorPos.z });
-        }
+        portasInterativas.push({
+            pivot: pivot,
+            doorGroup: doorGroup,
+            bbox: bbox,
+            x: doorPos.x,
+            y: doorPos.y,
+            z: doorPos.z,
+            aberta: false,
+            anguloAlvo: 0,
+            anguloAtual: 0,
+            trancada: trancada,
+            isVertical: isVertical
+        });
 
         pd.teleportaAndar = false;
     }
@@ -2752,6 +2745,13 @@ function animate() {
             const proximas = wallBoxes.filter(w =>
                 Math.abs(w.x - posDesejada.x) < 16 && Math.abs(w.z - posDesejada.z) < 16
             );
+
+            // Adicionar portas interativas fechadas à lista de colisões
+            for (const pi of portasInterativas) {
+                if (!pi.aberta && Math.abs(pi.x - posDesejada.x) < 16 && Math.abs(pi.z - posDesejada.z) < 16) {
+                    proximas.push({ box: pi.bbox, x: pi.x, z: pi.z });
+                }
+            }
 
             // Testar X
             camera.position.set(posDesejada.x, camera.position.y, posAnterior.z);
@@ -3601,7 +3601,113 @@ function animate() {
 }
 
 // ══════════════════════════════════════════════════════════════
-// SEÇÃO 8 — INICIAR TUDO
+// SEÇÃO 8 — CONTROLES MOBILE
+// ══════════════════════════════════════════════════════════════
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || ('ontouchstart' in window);
+if (isMobile) {
+    document.getElementById('mobile-joystick').style.display = 'block';
+    document.getElementById('mobile-interact').style.display = 'block';
+    document.getElementById('mobile-jump').style.display = 'block';
+    document.getElementById('hud-status').style.display = 'none';
+
+    document.getElementById('btn-jogar').addEventListener('click', (e) => {
+        e.stopImmediatePropagation();
+        modoDevAtivo = false;
+        document.getElementById('painel-dev').style.display = 'none';
+        document.getElementById('menu-inicial').style.display = 'none';
+        document.getElementById('tela-pausa').style.display = 'none';
+    }, true);
+
+    const joyBase = document.getElementById('mobile-joystick');
+    const joyKnob = document.getElementById('joystick-knob');
+    let joyActive = false;
+    let joyStartX = 0, joyStartY = 0;
+
+    joyBase.addEventListener('touchstart', e => {
+        e.preventDefault();
+        joyActive = true;
+        joyStartX = e.touches[0].clientX;
+        joyStartY = e.touches[0].clientY;
+        moveForward = moveBackward = moveLeft = moveRight = false;
+    }, {passive: false});
+
+    joyBase.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if(!joyActive) return;
+        const dx = e.touches[0].clientX - joyStartX;
+        const dy = e.touches[0].clientY - joyStartY;
+        const dist = Math.min(35, Math.sqrt(dx*dx + dy*dy));
+        const angle = Math.atan2(dy, dx);
+        joyKnob.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
+        
+        if (dist > 10) {
+            moveForward = dy < -10;
+            moveBackward = dy > 10;
+            moveLeft = dx < -10;
+            moveRight = dx > 10;
+        } else {
+            moveForward = moveBackward = moveLeft = moveRight = false;
+        }
+    }, {passive: false});
+
+    joyBase.addEventListener('touchend', e => {
+        e.preventDefault();
+        joyActive = false;
+        joyKnob.style.transform = 'translate(0px, 0px)';
+        moveForward = moveBackward = moveLeft = moveRight = false;
+    }, {passive: false});
+
+    let lookStartX = 0, lookStartY = 0;
+    let pitch = 0, yaw = 0;
+
+    document.addEventListener('touchstart', e => {
+        for(let i=0; i<e.touches.length; i++) {
+            const t = e.touches[i];
+            if(t.clientX > window.innerWidth / 2 && t.target.id !== 'mobile-interact' && t.target.id !== 'mobile-jump') {
+                lookStartX = t.clientX;
+                lookStartY = t.clientY;
+                yaw = camera.rotation.y;
+                pitch = camera.rotation.x;
+            }
+        }
+    }, {passive: false});
+
+    document.addEventListener('touchmove', e => {
+        for(let i=0; i<e.touches.length; i++) {
+            const t = e.touches[i];
+            if(t.clientX > window.innerWidth / 2 && t.target.id !== 'mobile-interact' && t.target.id !== 'mobile-jump') {
+                const dx = t.clientX - lookStartX;
+                const dy = t.clientY - lookStartY;
+                
+                yaw -= dx * 0.005;
+                pitch -= dy * 0.005;
+                pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+                
+                camera.rotation.set(pitch, yaw, 0, 'YXZ');
+                
+                lookStartX = t.clientX;
+                lookStartY = t.clientY;
+            }
+        }
+    }, {passive: false});
+
+    document.getElementById('mobile-interact').addEventListener('touchstart', e => {
+        e.preventDefault();
+        interactPressed = true;
+        setTimeout(() => interactPressed = false, 150);
+    });
+
+    document.getElementById('mobile-jump').addEventListener('touchstart', e => {
+        e.preventDefault();
+        if(isOnGround && !noclipAtivo) {
+            velocidadeY = 5.5; 
+            isOnGround = false;
+        }
+    });
+}
+
+// ══════════════════════════════════════════════════════════════
+// SEÇÃO 9 — INICIAR TUDO
 // ══════════════════════════════════════════════════════════════
 init3D();
 </script>
