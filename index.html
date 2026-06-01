@@ -47,6 +47,21 @@
             border:2px solid rgba(100,100,200,0.3); color:#aaa; font-size:0.7rem;
             font-family:monospace; cursor:pointer; line-height:55px; text-align:center;
         }
+        /* Botões adicionais mobile: lanterna e recarga */
+        #mobile-flashlight {
+            display:none; position:fixed; bottom:40px; right:125px; width:55px; height:55px;
+            z-index:300; border-radius:50%; background:rgba(60,120,60,0.45);
+            border:2px solid rgba(100,200,100,0.4); color:#fff; font-size:1.2rem; cursor:pointer;
+            line-height:55px; text-align:center; user-select:none; -webkit-user-select:none;
+        }
+        #mobile-flashlight:active { background:rgba(100,200,100,0.7); }
+        #mobile-reload {
+            display:none; position:fixed; bottom:110px; right:110px; width:55px; height:55px;
+            z-index:300; border-radius:50%; background:rgba(120,120,60,0.45);
+            border:2px solid rgba(200,200,100,0.4); color:#fff; font-size:1.2rem; cursor:pointer;
+            line-height:55px; text-align:center; user-select:none; -webkit-user-select:none;
+        }
+        #mobile-reload:active { background:rgba(200,200,100,0.7); }
 
         #vhs-overlay {
             position:absolute; top:0; left:0; width:100%; height:100%;
@@ -67,6 +82,14 @@
             position:absolute; bottom:20px; left:20px; z-index:6;
             color:#6b612c; font-size:0.75rem; pointer-events:none;
             text-shadow:1px 1px 2px #000; line-height:1.5; display:none;
+        }
+        @media (max-width: 768px) {
+            #hud-status {
+                bottom: auto;
+                top: 15px;
+                left: 15px;
+                font-size: 0.65rem;
+            }
         }
 
         #prompt-porta {
@@ -173,6 +196,8 @@
     <div>SINAL DE RÁDIO: ████████ (INCOMPREENSÍVEL)</div>
     <div>GPS / BÚSSOLA: SINAL NÃO ENCONTRADO</div>
     <div>CO2: <span id="co2-display">0.0410</span>%</div>
+    <div>LANTERNA [F]: <span id="flashlight-status">DESLIGADA</span> | BATERIA: <span id="battery-display">100</span>%</div>
+    <div>PILHAS: <span id="pilhas-display">0</span> (Pressione [R] para usar pilha)</div>
     <div id="alerta-fluido" style="color:#ff4444; display:none; font-weight:bold;">⚠ FLUIDO DE CARPETE DETECTADO</div>
     <div id="alerta-contencao" style="color:#ff2222; display:none; font-weight:bold; animation:piscar 0.5s infinite;">⚠ CONTENÇÃO FALHOU ⚠</div>
 </div>
@@ -394,6 +419,8 @@
 <div id="mobile-joystick"><div id="joystick-knob"></div></div>
 <div id="mobile-interact">E</div>
 <div id="mobile-jump">⬆</div>
+<div id="mobile-flashlight">🔦</div>
+<div id="mobile-reload">🔋</div>
 
 <script>
 // ══════════════════════════════════════════════════════════════
@@ -457,6 +484,8 @@ function gerarTeto() {
 // ══════════════════════════════════════════════════════════════
 
 let scene, camera, renderer, controls;
+let jogoIniciado = false;
+let ultimoTempoInteracao = 0;
 let audioCtx, oscillator, gainNode, biquadFilter;
 let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
 let sprinting = false;
@@ -518,6 +547,14 @@ let zonaDeFalha = [];      // meshes visuais das bordas
 let faseAlarme = 'normal'; // 'normal' | 'amarelo' | 'vermelho'
 let deathActive = false;   // previne inputs durante death sequence
 
+// === FASE 3 — NOVAS VARIÁVEIS (Lanterna, Pilhas, Agachamento e Áudio 3D) ===
+let lanternaAtiva = false;
+let bateriaNivel = 1.0;     // 100% de carga inicial
+let quantidadePilhas = 0;
+let lanternaRef = null;     // Referência ao SpotLight
+let agachado = false;
+let audioListener = null;   // Listener 3D nativo do Three.js
+
 // Colapso Dimensional (sistema de inatividade + morte aleatória)
 let tempoParado = 0;        // segundos sem se mover
 let colapsoProgress = 0;    // 0.0 → 1.0 (zoom progress)
@@ -546,6 +583,12 @@ const promptPorta = document.getElementById('prompt-porta');
 function initAudio() {
     if (audioCtx) return;
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Instanciar o listener na câmera
+    audioListener = new THREE.AudioListener();
+    camera.add(audioListener);
+    
+    // Oscilador de zumbido de fundo (Global)
     oscillator = audioCtx.createOscillator();
     oscillator.type = 'sawtooth';
     oscillator.frequency.value = 60;
@@ -559,7 +602,7 @@ function initAudio() {
     gainNode.connect(audioCtx.destination);
     oscillator.start();
 
-    // === FASE 2C: Oscilador do Wire ===
+    // === FASE 2C: Oscilador do Wire (será posicional) ===
     wireOsc = audioCtx.createOscillator();
     wireOsc.type = 'sine';
     wireOsc.frequency.value = 80;
@@ -567,8 +610,109 @@ function initAudio() {
     wireGain.gain.value = 0;
     const wireFilt = audioCtx.createBiquadFilter();
     wireFilt.type = 'lowpass'; wireFilt.frequency.value = 200;
-    wireOsc.connect(wireFilt).connect(wireGain).connect(audioCtx.destination);
+    wireOsc.connect(wireFilt).connect(wireGain); // Não conecta no destination global!
     wireOsc.start();
+
+    // Inicializar os sons posicionais para o pool de 15 luzes
+    for (let i = 0; i < poolDeLuzesReais.length; i++) {
+        const lObj = poolDeLuzesReais[i];
+        if (lObj.sound) continue;
+
+        const pAudio = new THREE.PositionalAudio(audioListener);
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = 60 + Math.random() * 4; // desafinação analógica leve
+        
+        const gn = audioCtx.createGain();
+        gn.gain.value = 0.0; // Começa zerado, regulado dinamicamente no loop
+        
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 180;
+        
+        osc.connect(filter).connect(gn);
+        pAudio.setNodeSource(gn);
+        pAudio.setRefDistance(1.5);
+        pAudio.setMaxDistance(10);
+        
+        lObj.light.add(pAudio);
+        osc.start();
+        
+        lObj.sound = pAudio;
+        lObj.gainNode = gn;
+        lObj.oscillator = osc;
+    }
+}
+
+// Criar som posicional 3D do projetor ASYNC
+function criarAudioProjetor(projetorMesh) {
+    if (!audioCtx || !audioListener) return;
+    const sound = new THREE.PositionalAudio(audioListener);
+    
+    const osc = audioCtx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = 220;
+    
+    // LFO para efeito de vibrato analógico vintage
+    const lfo = audioCtx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 4.2;
+    
+    const lfoGain = audioCtx.createGain();
+    lfoGain.gain.value = 6.0;
+    
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+    
+    const pGain = audioCtx.createGain();
+    pGain.gain.value = 0.06;
+    
+    osc.connect(pGain);
+    sound.setNodeSource(pGain);
+    sound.setRefDistance(2.5);
+    sound.setMaxDistance(12);
+    
+    projetorMesh.add(sound);
+    osc.start();
+    lfo.start();
+}
+
+// Criar som de tique-taque posicional para relógio
+function criarAudioRelogio(relogioMesh) {
+    if (!audioCtx || !audioListener) return;
+    const sound = new THREE.PositionalAudio(audioListener);
+    sound.setRefDistance(1.0);
+    sound.setMaxDistance(6);
+    relogioMesh.add(sound);
+    
+    function tick() {
+        if (!audioCtx || !relogioMesh.parent) return; // para se relógio for removido
+        
+        const dur = 0.015;
+        const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) {
+            d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (d.length * 0.12));
+        }
+        
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 1300 + Math.random() * 200;
+        filter.Q.value = 6;
+        
+        const gn = audioCtx.createGain();
+        gn.gain.value = 0.03;
+        
+        src.connect(filter).connect(gn);
+        gn.connect(sound);
+        src.start();
+        
+        setTimeout(tick, 1000);
+    }
+    setTimeout(tick, Math.random() * 1000);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -786,6 +930,7 @@ function criarRelogio(x, y, z, faceRot) {
 
     g.position.set(x, y, z);
     g.rotation.y = faceRot;
+    criarAudioRelogio(g); // ÁUDIO POSICIONAL 3D
     return g;
 }
 
@@ -900,6 +1045,28 @@ function criarQuadro(x, y, z, faceRot) {
     g.position.set(x, y, z);
     g.rotation.y = faceRot;
     return g;
+}
+
+function criarPilhaVisual() {
+    const group = new THREE.Group();
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1b1b1b, roughness: 0.5, metalness: 0.8 });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.14, 8), bodyMat);
+    body.rotation.z = Math.PI / 2;
+    group.add(body);
+
+    const tipMat = new THREE.MeshStandardMaterial({ color: 0xb87333, roughness: 0.3, metalness: 0.8 });
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.02, 8), tipMat);
+    tip.position.x = 0.08;
+    tip.rotation.z = Math.PI / 2;
+    group.add(tip);
+    
+    const stripeMat = new THREE.MeshStandardMaterial({ color: 0x33aa33, roughness: 0.5, metalness: 0.5 });
+    const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.041, 0.041, 0.04, 8), stripeMat);
+    stripe.rotation.z = Math.PI / 2;
+    stripe.position.x = -0.02;
+    group.add(stripe);
+
+    return group;
 }
 
 function gerarMoveis(grid, rooms, rows, cols, cellSize, yOff) {
@@ -1017,6 +1184,19 @@ function gerarMoveis(grid, rooms, rows, cols, cellSize, yOff) {
                 const bbox = new THREE.Box3().setFromObject(mesa);
                 wallBoxes.push({ box: bbox, x: cellX(c) + dx, z: cellZ(r) + dz });
                 moveisArray.push({ mesh: mesa, box: bbox, tipo: 'mesa' });
+
+                // Spawn de Pilha coletável (35% chance por mesa)
+                if (Math.random() < 0.35) {
+                    const px = cellX(c) + dx + (Math.random() - 0.5) * 0.4;
+                    const pz = cellZ(r) + dz + (Math.random() - 0.5) * 0.2;
+                    const py = yOff + 0.78; // tampo da mesa
+                    const pilha = criarPilhaVisual();
+                    pilha.position.set(px, py, pz);
+                    pilha.rotation.y = Math.random() * Math.PI * 2;
+                    scene.add(pilha);
+                    objetosDinamicos.push(pilha);
+                    moveisArray.push({ mesh: pilha, tipo: 'pilha', collected: false });
+                }
             }
         }
     }
@@ -1101,6 +1281,19 @@ function gerarMoveis(grid, rooms, rows, cols, cellSize, yOff) {
             const bbox = new THREE.Box3().setFromObject(arq);
             wallBoxes.push({ box: bbox, x: ax, z: az });
             moveisArray.push({ mesh: arq, box: bbox, tipo: 'arquivo' });
+
+            // Spawn de Pilha coletável (30% chance por armário)
+            if (Math.random() < 0.3) {
+                const px = ax + (Math.random() - 0.5) * 0.2;
+                const pz = az + (Math.random() - 0.5) * 0.2;
+                const py = yOff + 1.4; // no topo do arquivo
+                const pilha = criarPilhaVisual();
+                pilha.position.set(px, py, pz);
+                pilha.rotation.y = Math.random() * Math.PI * 2;
+                scene.add(pilha);
+                objetosDinamicos.push(pilha);
+                moveisArray.push({ mesh: pilha, tipo: 'pilha', collected: false });
+            }
         }
     }
 
@@ -1272,6 +1465,19 @@ function gerarMoveis(grid, rooms, rows, cols, cellSize, yOff) {
         }
     }
 
+    // Habilitar sombras para todos os móveis gerados nesta chamada
+    for (let i = moveisStartIdx; i < moveisArray.length; i++) {
+        const m = moveisArray[i];
+        if (m.mesh) {
+            m.mesh.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+        }
+    }
+
     console.log(`[AURA] Mobiliário: ${moveisArray.length} peças geradas (incluindo anomalias)`);
 }
 
@@ -1368,6 +1574,15 @@ function spawnWire() {
         spd: 1.0, spawnTimer: 0, despawnTimer: 0
     };
     console.log(`[AURA] Wire spawnou em [${targetR},${targetC}]`);
+
+    if (audioListener && wireGain) {
+        const wireSound = new THREE.PositionalAudio(audioListener);
+        try { wireGain.disconnect(); } catch(e) {}
+        wireGain.connect(wireSound);
+        wireSound.setRefDistance(3.0);
+        wireSound.setMaxDistance(30.0);
+        group.add(wireSound);
+    }
 }
 
 function criarObservadorVisual() {
@@ -1485,6 +1700,7 @@ function criarProjetor(x, z, rot) {
 
     const proj = { mesh: tela, canvas, ctx, texture, slideIdx: 0, timer: 0, light, x, z };
     projetores.push(proj);
+    criarAudioProjetor(tela); // ÁUDIO POSICIONAL 3D
     return proj;
 }
 
@@ -1745,9 +1961,96 @@ function abrirExtras(grid, rows, cols, prob) {
     }
 }
 
-// ══════════════════════════════════════════════════════════════
-// SEÇÃO 5 — CONSTRUÇÃO DO MUNDO
-// ══════════════════════════════════════════════════════════════
+function criarEscadariaReal(x, z, yOff) {
+    if (!yOff) yOff = 0;
+    const group = new THREE.Group();
+    const matMadeira = new THREE.MeshStandardMaterial({ color: 0x4a3a25, roughness: 0.8 });
+    const matMetal = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8, roughness: 0.3 });
+
+    const totalAltura = WALL_HEIGHT; // 4.0
+    const numDegraus = 16;
+    const espelho = totalAltura / numDegraus; // 0.25m por degrau
+    const comprimentoZ = 7.0; // comprimento horizontal da escada
+    const larguraX = 2.2;
+    const piso = comprimentoZ / numDegraus; // 0.4375m por degrau
+
+    // Vigas laterais de suporte (metal escuro)
+    const vigaGeo = new THREE.BoxGeometry(0.08, 0.35, 8.0);
+    
+    const vigaL = new THREE.Mesh(vigaGeo, matMetal);
+    vigaL.position.set(-larguraX/2 + 0.04, totalAltura/2, 0);
+    vigaL.rotation.x = -Math.atan2(totalAltura, comprimentoZ);
+    vigaL.castShadow = true;
+    vigaL.receiveShadow = true;
+    group.add(vigaL);
+
+    const vigaR = new THREE.Mesh(vigaGeo, matMetal);
+    vigaR.position.set(larguraX/2 - 0.04, totalAltura/2, 0);
+    vigaR.rotation.x = -Math.atan2(totalAltura, comprimentoZ);
+    vigaR.castShadow = true;
+    vigaR.receiveShadow = true;
+    group.add(vigaR);
+
+    // Degraus individuais de madeira
+    const degrauGeo = new THREE.BoxGeometry(larguraX - 0.1, 0.06, piso + 0.04);
+    for (let i = 0; i < numDegraus; i++) {
+        const degrau = new THREE.Mesh(degrauGeo, matMadeira);
+        // Distribui ao longo de Z (de +3.5 a -3.5) e Y (de 0 a 4.0)
+        const localZ = (comprimentoZ / 2) - (i * piso) - (piso / 2);
+        const localY = (i * espelho) + (espelho / 2);
+        degrau.position.set(0, localY, localZ);
+        degrau.castShadow = true;
+        degrau.receiveShadow = true;
+        group.add(degrau);
+    }
+
+    // Hastes verticais do corrimão (metal)
+    const hasteGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.9, 6);
+    // Barra superior do corrimão
+    const barraGeo = new THREE.BoxGeometry(0.03, 0.03, 8.0);
+
+    for (let i = 0; i <= numDegraus; i += 3) {
+        const localZ = (comprimentoZ / 2) - (i * piso);
+        const localY = (i * espelho);
+
+        if (localY < totalAltura) {
+            // Haste Esquerda
+            const hL = new THREE.Mesh(hasteGeo, matMetal);
+            hL.position.set(-larguraX/2 + 0.04, localY + 0.45, localZ);
+            hL.castShadow = true;
+            group.add(hL);
+
+            // Haste Direita
+            const hR = new THREE.Mesh(hasteGeo, matMetal);
+            hR.position.set(larguraX/2 - 0.04, localY + 0.45, localZ);
+            hR.castShadow = true;
+            group.add(hR);
+        }
+    }
+
+    // Corrimão superior esquerdo
+    const barraL = new THREE.Mesh(barraGeo, matMetal);
+    barraL.position.set(-larguraX/2 + 0.04, totalAltura/2 + 0.9, 0);
+    barraL.rotation.x = -Math.atan2(totalAltura, comprimentoZ);
+    barraL.castShadow = true;
+    group.add(barraL);
+
+    // Corrimão superior direito
+    const barraR = new THREE.Mesh(barraGeo, matMetal);
+    barraR.position.set(larguraX/2 - 0.04, totalAltura/2 + 0.9, 0);
+    barraR.rotation.x = -Math.atan2(totalAltura, comprimentoZ);
+    barraR.castShadow = true;
+    group.add(barraR);
+
+    // Moldura no teto (para marcar a passagem de forma limpa)
+    const molduraGeo = new THREE.BoxGeometry(larguraX + 0.2, 0.06, 0.25);
+    const moldura = new THREE.Mesh(molduraGeo, matMetal);
+    moldura.position.set(0, totalAltura, -comprimentoZ/2);
+    group.add(moldura);
+
+    group.position.set(x, yOff, z);
+    return group;
+}
 
 function reconstruirMundo() {
     if (!scene) return;
@@ -1832,6 +2135,8 @@ function reconstruirMundo() {
         const m = new THREE.Mesh(geo, mat);
         m.position.set(x, y, z);
         if (ry) m.rotation.y = ry;
+        m.castShadow = true;
+        m.receiveShadow = true;
         scene.add(m);
         objetosDinamicos.push(m);
         return m;
@@ -2190,6 +2495,7 @@ function reconstruirMundo() {
     for (let pi = 0; pi < portasEscuras.length; pi++) {
         const pd = portasEscuras[pi];
         if (!pd.mesh) continue;
+        if (pd.teleportaAndar) continue;
         pd.mesh.material = matPortaMarrom;
 
         const doorPos = pd.mesh.position.clone();
@@ -2322,8 +2628,12 @@ function reconstruirMundo() {
     const geoKnobBola = new THREE.SphereGeometry(0.04, 8, 6);
     const geoKnobHaste = new THREE.CylinderGeometry(0.015, 0.015, 0.15, 6);
 
-    const allRooms = [...rooms, ...rooms2];
-    const exitRooms = allRooms.filter(rm => rm.size >= 2).sort(() => Math.random() - 0.5).slice(0, 3);
+    // Selecionar salas para escadas e portas exit de forma mutuamente exclusiva
+    const salasGrandesAndar0 = rooms.filter(rm => rm.size >= 2).sort(() => Math.random() - 0.5);
+    const salasEscadaEscolhidas = salasGrandesAndar0.slice(0, Math.min(3, salasGrandesAndar0.length));
+    const salasGrandesRestantesAndar0 = salasGrandesAndar0.slice(Math.min(3, salasGrandesAndar0.length));
+    const salasGrandesAndar1 = rooms2.filter(rm => rm.size >= 2).sort(() => Math.random() - 0.5);
+    const exitRooms = [...salasGrandesRestantesAndar0, ...salasGrandesAndar1].sort(() => Math.random() - 0.5).slice(0, 3);
 
     for (const rm of exitRooms) {
         const isFloor1 = rooms2.includes(rm);
@@ -2404,37 +2714,166 @@ function reconstruirMundo() {
         }
     }
 
-    // === ESCADAS (buracos no teto/chão que conectam andares) ===
+    // === ESCADAS (degraus e corrimãos reais que conectam andares) ===
     escadasRef = [];
-    const salasEscada = rooms.filter(rm => rm.size >= 2).sort(() => Math.random() - 0.5).slice(0, 3);
+    const salasEscada = salasEscadaEscolhidas;
     for (const rm of salasEscada) {
         const sx = cellX(rm.c);
         const sz = cellZ(rm.r);
 
-        // Rampa visual
-        const rampa = new THREE.Mesh(
-            new THREE.BoxGeometry(2.5, 0.15, 4.5),
-            new THREE.MeshStandardMaterial({ color: 0x4a4228, roughness: 0.8 })
-        );
-        rampa.position.set(sx, WALL_HEIGHT / 2, sz);
-        rampa.rotation.x = -Math.PI / 6;
-        scene.add(rampa);
-        objetosDinamicos.push(rampa);
+        // Criar escadaria corporativa realista
+        const escadaVisual = criarEscadariaReal(sx, sz, 0);
+        scene.add(escadaVisual);
+        objetosDinamicos.push(escadaVisual);
 
-        // Marcador visual
-        const marcador = new THREE.Mesh(
-            new THREE.RingGeometry(1.0, 1.5, 8),
-            new THREE.MeshBasicMaterial({ color: 0xffdd44, side: THREE.DoubleSide, transparent: true, opacity: 0.3 })
-        );
-        marcador.rotation.x = Math.PI / 2;
-        marcador.position.set(sx, WALL_HEIGHT - 0.01, sz);
-        scene.add(marcador);
-        objetosDinamicos.push(marcador);
-
-        escadasRef.push({ x: sx, z: sz, radius: 1.8 });
+        escadasRef.push({ x: sx, z: sz, larguraX: 2.2, comprimentoZ: 7.0 });
     }
 
     console.log(`[AURA] Mundo reconstruído: ${rows}x${cols} cells, ${wallBoxes.length} walls, ${portasEscuras.length} portas marrons, ${todasAsLuminarias.length} lights, ${escadasRef.length} escadas, 2 andares`);
+}
+
+function interagir() {
+    if (deathActive) return;
+    const agora = performance.now();
+    if (agora - ultimoTempoInteracao < 400) return;
+    ultimoTempoInteracao = agora;
+    
+    // 1. Procurar pilha coletável próxima
+    let pilhaPerto = null;
+    let menorDistPilha = Infinity;
+    for (const m of moveisArray) {
+        if (m.tipo === 'pilha' && !m.collected) {
+            const distP = camera.position.distanceTo(m.mesh.position);
+            if (distP < menorDistPilha) {
+                menorDistPilha = distP;
+                pilhaPerto = m;
+            }
+        }
+    }
+
+    if (pilhaPerto && menorDistPilha < 2.5) {
+        pilhaPerto.collected = true;
+        scene.remove(pilhaPerto.mesh);
+        quantidadePilhas++;
+        
+        if (audioCtx) {
+            const osc = audioCtx.createOscillator();
+            const gn = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1);
+            gn.gain.setValueAtTime(0.08, audioCtx.currentTime);
+            gn.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+            osc.connect(gn).connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.16);
+        }
+        
+        const pText = document.createElement('div');
+        pText.style.cssText = 'position:fixed; bottom:120px; left:50%; transform:translateX(-50%); color:#ffdd44; font-family:monospace; font-size:0.8rem; font-weight:bold; z-index:200; text-shadow:1px 1px 2px #000;';
+        pText.innerText = '🔋 PILHA COLETADA! [R] PARA RECARREGAR';
+        document.body.appendChild(pText);
+        setTimeout(() => pText.remove(), 2000);
+        return;
+    }
+
+    // 2. Procurar porta interativa
+    let portaMaisProxima = null;
+    let menorDistPI = Infinity;
+    for (const pi of portasInterativas) {
+        const dx = camera.position.x - pi.x;
+        const dz = camera.position.z - pi.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < menorDistPI) {
+            menorDistPI = dist;
+            portaMaisProxima = pi;
+        }
+    }
+
+    if (portaMaisProxima && menorDistPI < 3.5) {
+        if (portaMaisProxima.trancada) {
+            const prompt = document.getElementById('prompt-porta');
+            prompt.innerHTML = '🔒 TRANCADA';
+            prompt.style.opacity = '1';
+            prompt.style.display = 'block';
+            setTimeout(() => { prompt.style.opacity = '0'; prompt.style.display = 'none'; }, 1500);
+        } else {
+            portaMaisProxima.aberta = !portaMaisProxima.aberta;
+            if (portaMaisProxima.aberta) {
+                // Obter a posição do jogador em relação ao espaço local da porta
+                portaMaisProxima.pivot.updateMatrixWorld();
+                const localPlayerPos = portaMaisProxima.pivot.worldToLocal(camera.position.clone());
+                // Se o jogador está na frente (Z local positivo), abre para trás (Z local negativo, rotação positiva)
+                // Se o jogador está atrás (Z local negativo), abre para frente (Z local positivo, rotação negativa)
+                const sentido = localPlayerPos.z > 0 ? 1.0 : -1.0;
+                portaMaisProxima.anguloAlvo = sentido * (Math.PI / 2);
+            } else {
+                portaMaisProxima.anguloAlvo = 0;
+            }
+            
+            if (audioCtx) {
+                const osc = audioCtx.createOscillator();
+                const gn = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(portaMaisProxima.aberta ? 150 : 80, audioCtx.currentTime + 0.3);
+                gn.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gn.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+                osc.connect(gn).connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.31);
+            }
+        }
+        return;
+    }
+
+    // 3. Procurar porta de teleporte (vermelha EXIT)
+    let menorDistPorta = Infinity;
+    let portaEscuraPerto = null;
+    let pertoDePortaEscura = false;
+    for (const porta of portasEscuras) {
+        const dx = camera.position.x - porta.x;
+        const dz = camera.position.z - porta.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < menorDistPorta) {
+            menorDistPorta = dist;
+            portaEscuraPerto = porta;
+        }
+        if (dist < 8 && porta.teleportaAndar) {
+            pertoDePortaEscura = true;
+        }
+    }
+
+    if (portaEscuraPerto && menorDistPorta < 3.5 && portaEscuraPerto.teleportaAndar && noclipCooldown <= 0) {
+        noclipCooldown = 4.0;
+        const novoAndar = andarAtual === 0 ? 1 : 0;
+        const novaY = novoAndar === 0 ? 1.6 : (FLOOR1_BASE + 1.6);
+
+        const noclipOv = document.getElementById('noclip-overlay');
+        noclipOv.style.transition = 'opacity 0.3s';
+        noclipOv.style.opacity = '1';
+        if (oscillator && audioCtx) {
+            oscillator.frequency.setValueAtTime(12, audioCtx.currentTime);
+            if (gainNode) gainNode.gain.setValueAtTime(0.45, audioCtx.currentTime);
+            if (biquadFilter) biquadFilter.frequency.setValueAtTime(60, audioCtx.currentTime);
+        }
+        document.getElementById('vhs-overlay').style.opacity = '1';
+
+        setTimeout(() => {
+            camera.position.y = novaY;
+            andarAtual = novoAndar;
+            velocity.set(0, 0, 0);
+        }, 600);
+
+        setTimeout(() => {
+            noclipOv.style.transition = 'opacity 1.2s';
+            noclipOv.style.opacity = '0';
+            if (gainNode && audioCtx) gainNode.gain.setValueAtTime(0.07, audioCtx.currentTime);
+            if (oscillator && audioCtx) oscillator.frequency.setValueAtTime(60, audioCtx.currentTime);
+            if (biquadFilter && audioCtx) biquadFilter.frequency.setValueAtTime(350, audioCtx.currentTime);
+            document.getElementById('vhs-overlay').style.opacity = document.getElementById('vhsSlider').value;
+        }, 1500);
+    }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2449,11 +2888,29 @@ function init3D() {
     camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
     camera.rotation.order = 'YXZ'; // ESSENCIAL: match com PointerLockControls (previne gimbal lock)
     camera.position.set(6, 1.6, 6); // Centro da célula central (safe spawn)
+    scene.add(camera);
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(innerWidth, innerHeight);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
+
+    // === CRIAR LANTERNA (SpotLight) ===
+    lanternaRef = new THREE.SpotLight(0xfcf6c5, 0.0, 18, Math.PI / 6, 0.6, 1.0);
+    lanternaRef.position.set(0.1, -0.15, -0.1); // Posição levemente deslocada (simulando braço direito)
+    lanternaRef.castShadow = true;
+    lanternaRef.shadow.mapSize.width = 1024;
+    lanternaRef.shadow.mapSize.height = 1024;
+    lanternaRef.shadow.camera.near = 0.1;
+    lanternaRef.shadow.camera.far = 20;
+    camera.add(lanternaRef);
+
+    const lanternaTarget = new THREE.Object3D();
+    lanternaTarget.position.set(0, 0, -1);
+    camera.add(lanternaTarget);
+    lanternaRef.target = lanternaTarget;
 
     controls = new THREE.PointerLockControls(camera, document.body);
 
@@ -2462,6 +2919,7 @@ function init3D() {
         telaPausa.style.display = 'none';
         hudStatus.style.display = 'block';
         crosshair.style.display = 'block';
+        jogoIniciado = true;
         if (modoDevAtivo) painelDev.style.display = 'none';
         if (!audioCtx) initAudio();
         if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
@@ -2473,12 +2931,19 @@ function init3D() {
         if (modoDevAtivo) {
             painelDev.style.display = 'block';
         }
-        else { telaPausa.style.display = 'flex'; hudStatus.style.display = 'none'; }
+        else {
+            if (jogoIniciado) {
+                telaPausa.style.display = 'flex';
+                hudStatus.style.display = 'none';
+            } else {
+                menuInicial.style.display = 'flex';
+            }
+        }
     });
 
-    // DEV MODE: clicar no canvas do jogo re-locka direto
+    // Re-lockar o cursor ao clicar no canvas se o mouse estiver solto e as telas de menu/pausa fechadas
     renderer.domElement.addEventListener('click', () => {
-        if (modoDevAtivo && !controls.isLocked) {
+        if (!controls.isLocked && menuInicial.style.display === 'none' && telaPausa.style.display === 'none') {
             controls.lock();
         }
     });
@@ -2496,6 +2961,7 @@ function init3D() {
     // === CHÃO E TETO (ANDAR 0) ===
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), matChao);
     floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
     scene.add(floor);
 
     const ceil = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), matTeto);
@@ -2503,6 +2969,7 @@ function init3D() {
     ceil.position.y = WALL_HEIGHT;
     ceil.material = matTeto.clone();
     ceil.material.side = THREE.DoubleSide;
+    ceil.receiveShadow = true;
     scene.add(ceil);
 
     // === ANDAR 1 (acima) — separado por FLOOR_GAP ===
@@ -2510,12 +2977,14 @@ function init3D() {
     floor2.rotation.x = -Math.PI / 2;
     floor2.position.y = FLOOR1_BASE; // 4.15 — acima do teto do andar 0
     floor2.material.side = THREE.DoubleSide;
+    floor2.receiveShadow = true;
     scene.add(floor2);
 
     const ceil2 = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), matTeto.clone());
     ceil2.rotation.x = Math.PI / 2;
     ceil2.position.y = FLOOR1_BASE + WALL_HEIGHT; // 8.15
     ceil2.material.side = THREE.DoubleSide;
+    ceil2.receiveShadow = true;
     scene.add(ceil2);
 
     // === POOL DE LUZES (15 PointLights que teleportam pras mais próximas) ===
@@ -2540,7 +3009,26 @@ function init3D() {
             case 'KeyA': case 'ArrowLeft':  moveLeft     = true; break;
             case 'KeyD': case 'ArrowRight': moveRight    = true; break;
             case 'ShiftLeft': case 'ShiftRight': sprinting = true; break;
-            case 'KeyE': interactPressed = true; break;
+            case 'KeyE':
+                if (!e.repeat) interagir();
+                break;
+            case 'KeyF':
+                lanternaAtiva = !lanternaAtiva;
+                if (lanternaRef) {
+                    lanternaRef.intensity = lanternaAtiva ? (bateriaNivel > 0 ? 1.8 : 0) : 0;
+                }
+                break;
+            case 'KeyR':
+                if (quantidadePilhas > 0 && bateriaNivel < 1.0) {
+                    quantidadePilhas--;
+                    bateriaNivel = Math.min(1.0, bateriaNivel + 0.50);
+                }
+                break;
+            case 'KeyC':
+            case 'ControlLeft':
+            case 'ControlRight':
+                agachado = !agachado;
+                break;
             case 'KeyL':
                 noclipAtivo = !noclipAtivo;
                 console.log('[DEV] Noclip:', noclipAtivo ? 'ATIVADO' : 'DESATIVADO');
@@ -2560,7 +3048,6 @@ function init3D() {
             case 'KeyA': case 'ArrowLeft':  moveLeft     = false; break;
             case 'KeyD': case 'ArrowRight': moveRight    = false; break;
             case 'ShiftLeft': case 'ShiftRight': sprinting = false; break;
-            case 'KeyE': interactPressed = false; break;
         }
     });
 
@@ -2571,17 +3058,36 @@ function init3D() {
     });
 
     // === BOTÕES ===
-    document.getElementById('btn-jogar').addEventListener('click', () => {
-        modoDevAtivo = false; painelDev.style.display = 'none'; controls.lock();
+    document.getElementById('btn-jogar').addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        modoDevAtivo = false;
+        if (!audioCtx) initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        controls.lock();
     });
-    document.getElementById('btn-dev').addEventListener('click', () => {
+    document.getElementById('btn-dev').addEventListener('mousedown', (e) => {
+        e.preventDefault();
         modoDevAtivo = true; menuInicial.style.display = 'none'; painelDev.style.display = 'block';
     });
-    document.getElementById('btn-continuar').addEventListener('click', () => controls.lock());
-    document.getElementById('btn-menu').addEventListener('click', () => {
-        telaPausa.style.display = 'none'; menuInicial.style.display = 'flex';
+    document.getElementById('btn-continuar').addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        if (!audioCtx) initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        controls.lock();
     });
-    document.getElementById('btn-testar').addEventListener('click', () => { modoDevAtivo = true; controls.lock(); });
+    document.getElementById('btn-menu').addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        telaPausa.style.display = 'none';
+        menuInicial.style.display = 'flex';
+        jogoIniciado = false;
+    });
+    document.getElementById('btn-testar').addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        modoDevAtivo = true;
+        if (!audioCtx) initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        controls.lock();
+    });
     document.getElementById('btn-rebuild').addEventListener('click', () => {
         const cs = parseInt(document.getElementById('cellSize').value);
         const rws = Math.floor(2 * MAP_SIZE / cs);
@@ -2729,7 +3235,20 @@ function animate() {
         direction.z = Number(moveForward) - Number(moveBackward);
         direction.x = Number(moveRight) - Number(moveLeft);
         direction.normalize();
-        const accel = sprinting ? 85 : 40;
+        
+        // === FASE 3: AGACHAMENTO - INTERPOLAR EYE HEIGHT E VELOCIDADE ===
+        if (typeof window.currentEyeHeight === 'undefined') {
+            window.currentEyeHeight = 1.6;
+        }
+        const targetEye = agachado ? 0.8 : 1.6;
+        window.currentEyeHeight += (targetEye - window.currentEyeHeight) * 0.15; // Suave lerp
+        const eyeHeight = window.currentEyeHeight;
+
+        let accel = sprinting ? 85 : 40;
+        if (agachado) {
+            accel *= 0.40; // 40% da velocidade normal
+        }
+
         if (moveForward || moveBackward) velocity.z -= direction.z * accel * delta;
         if (moveLeft || moveRight)       velocity.x -= direction.x * accel * delta;
 
@@ -2742,7 +3261,8 @@ function animate() {
         // ——— COLISÃO SEPARADA POR EIXO ———
         const posDesejada = camera.position.clone();
         const pSize = 0.6;
-        const feetY = camera.position.y - 1.2; // pés do jogador (camera = olhos)
+        const feetY = camera.position.y - (eyeHeight * 0.75); // Dinâmico com a altura dos olhos
+        const colHeight = agachado ? 0.5 : 1.0; // Bounding box encolhe ao agachar
 
         if (!noclipAtivo) {
             const proximas = wallBoxes.filter(w =>
@@ -2760,8 +3280,8 @@ function animate() {
             // Testar X
             camera.position.set(posDesejada.x, camera.position.y, posAnterior.z);
             const testBoxX = new THREE.Box3().setFromCenterAndSize(
-                new THREE.Vector3(camera.position.x, feetY + 0.5, camera.position.z),
-                new THREE.Vector3(pSize, 1.0, pSize)
+                new THREE.Vector3(camera.position.x, feetY + colHeight / 2, camera.position.z),
+                new THREE.Vector3(pSize, colHeight, pSize)
             );
             for (const w of proximas) {
                 if (!testBoxX.intersectsBox(w.box)) continue;
@@ -2773,8 +3293,8 @@ function animate() {
             // Testar Z
             camera.position.set(camera.position.x, camera.position.y, posDesejada.z);
             const testBoxZ = new THREE.Box3().setFromCenterAndSize(
-                new THREE.Vector3(camera.position.x, feetY + 0.5, camera.position.z),
-                new THREE.Vector3(pSize, 1.0, pSize)
+                new THREE.Vector3(camera.position.x, feetY + colHeight / 2, camera.position.z),
+                new THREE.Vector3(pSize, colHeight, pSize)
             );
             for (const w of proximas) {
                 if (!testBoxZ.intersectsBox(w.box)) continue;
@@ -2785,8 +3305,8 @@ function animate() {
 
         // === GRAVIDADE + PULO + NOCLIP FLY ===
         const andando = moveForward || moveBackward || moveLeft || moveRight;
-        const bobSpeed = sprinting ? 0.012 : 0.007;
-        const bobAmp = sprinting ? 0.08 : 0.05;
+        const bobSpeed = agachado ? 0.004 : (sprinting ? 0.012 : 0.007);
+        const bobAmp = agachado ? 0.02 : (sprinting ? 0.08 : 0.05);
 
         if (noclipAtivo) {
             // Modo voo (ambos os andares)
@@ -2805,21 +3325,48 @@ function animate() {
             // === Determinar andar atual e limites ===
             const floorBase = andarAtual === 0 ? 0 : FLOOR1_BASE;
             const floorCeil = andarAtual === 0 ? WALL_HEIGHT : (FLOOR1_BASE + WALL_HEIGHT);
-            const eyeHeight = 1.6;
+            const eyeHeight = window.currentEyeHeight;
 
-            // === Detectar chão dinâmico (móveis embaixo dos pés) ===
+            // === Verificar se o jogador está na escada ===
+            let naEscada = false;
+            let escadaAlturaChao = 0;
+
+            for (const esc of escadasRef) {
+                const dx = camera.position.x - esc.x;
+                const dz = camera.position.z - esc.z;
+                
+                // esc.larguraX = 2.2, esc.comprimentoZ = 7.0
+                if (Math.abs(dx) < 1.2 && Math.abs(dz) < 3.6) {
+                    const pct = ((esc.z + 3.5) - camera.position.z) / 7.0;
+                    if (pct >= -0.05 && pct <= 1.05) {
+                        naEscada = true;
+                        escadaAlturaChao = Math.max(0.0, Math.min(4.0, pct * 4.0));
+                        break;
+                    }
+                }
+            }
+
+            // === Detectar chão dinâmico ===
             let alturaChao = floorBase + eyeHeight;
-            const feetCheck = camera.position.y - 1.2;
 
-            // Procurar superfícies de móveis embaixo
-            for (const m of moveisArray) {
-                if (!m.box) continue;
-                const xOverlap = camera.position.x + pSize/2 > m.box.min.x && camera.position.x - pSize/2 < m.box.max.x;
-                const zOverlap = camera.position.z + pSize/2 > m.box.min.z && camera.position.z - pSize/2 < m.box.max.z;
-                if (xOverlap && zOverlap) {
-                    const movelTop = m.box.max.y + 1.2;
-                    if (feetCheck <= m.box.max.y + 0.2 && feetCheck >= m.box.max.y - 0.5) {
-                        if (movelTop > alturaChao) alturaChao = movelTop;
+            if (naEscada) {
+                if (andarAtual === 0) {
+                    alturaChao = escadaAlturaChao + eyeHeight;
+                } else {
+                    alturaChao = FLOOR1_BASE + (escadaAlturaChao - 4.0) + eyeHeight;
+                }
+            } else {
+                const feetCheck = camera.position.y - (eyeHeight * 0.75);
+                // Procurar superfícies de móveis embaixo
+                for (const m of moveisArray) {
+                    if (!m.box) continue;
+                    const xOverlap = camera.position.x + pSize/2 > m.box.min.x && camera.position.x - pSize/2 < m.box.max.x;
+                    const zOverlap = camera.position.z + pSize/2 > m.box.min.z && camera.position.z - pSize/2 < m.box.max.z;
+                    if (xOverlap && zOverlap) {
+                        const movelTop = m.box.max.y + 1.2;
+                        if (feetCheck <= m.box.max.y + 0.2 && feetCheck >= m.box.max.y - 0.5) {
+                            if (movelTop > alturaChao) alturaChao = movelTop;
+                        }
                     }
                 }
             }
@@ -2831,43 +3378,30 @@ function animate() {
                 isOnGround = true;
             }
 
-            // === Escada: perto de uma escada → permite subir/descer entre andares ===
-            let nearStair = false;
-            for (const esc of escadasRef) {
-                const dx = camera.position.x - esc.x;
-                const dz = camera.position.z - esc.z;
-                if (dx * dx + dz * dz < esc.radius * esc.radius) {
-                    nearStair = true;
-                    break;
-                }
-            }
-
-            // Teto do andar atual
-            if (camera.position.y >= floorCeil - 0.3) {
-                if (nearStair && andarAtual === 0) {
-                    // Subir pro andar 1!
+            // === Transição de andar baseada na escada ===
+            if (naEscada) {
+                if (andarAtual === 0 && escadaAlturaChao > 3.6) {
                     andarAtual = 1;
-                    camera.position.y = FLOOR1_BASE + eyeHeight;
+                    camera.position.y = FLOOR1_BASE + (escadaAlturaChao - 4.0) + eyeHeight;
                     velocidadeY = 0;
                     isOnGround = true;
-                    console.log('[AURA] Subiu pro Andar 1!');
-                } else {
-                    // Bater no teto normalmente
+                    console.log('[AURA] Transição suave para o Andar 1');
+                } else if (andarAtual === 1 && escadaAlturaChao < 0.4) {
+                    andarAtual = 0;
+                    camera.position.y = escadaAlturaChao + eyeHeight;
+                    velocidadeY = 0;
+                    isOnGround = true;
+                    console.log('[AURA] Transição suave para o Andar 0');
+                }
+            } else {
+                // Teto do andar atual
+                if (camera.position.y >= floorCeil - 0.3) {
                     camera.position.y = floorCeil - 0.3;
                     velocidadeY = -1;
                 }
-            }
 
-            // Cair pelo chão do andar 1 → voltar pro andar 0
-            if (andarAtual === 1 && camera.position.y < FLOOR1_BASE + 0.5) {
-                if (nearStair) {
-                    andarAtual = 0;
-                    camera.position.y = WALL_HEIGHT - 0.5;
-                    velocidadeY = -2;
-                    isOnGround = false;
-                    console.log('[AURA] Desceu pro Andar 0!');
-                } else {
-                    // Manter no chão do andar 1
+                // Cair pelo chão do andar 1
+                if (andarAtual === 1 && camera.position.y < FLOOR1_BASE + 0.2) {
                     camera.position.y = FLOOR1_BASE + eyeHeight;
                     velocidadeY = 0;
                     isOnGround = true;
@@ -2885,7 +3419,7 @@ function animate() {
         // === FASE 2C: SOM DE PASSOS (sincronizado com head bob) ===
         const currentBobVal = Math.sin(time * bobSpeed);
         const currentSign = currentBobVal >= 0 ? 1 : -1;
-        if (andando && prevBobSign < 0 && currentSign >= 0 && audioCtx) {
+        if (andando && prevBobSign < 0 && currentSign >= 0 && audioCtx && !agachado) {
             const dur = 0.035;
             const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
             const d = buf.getChannelData(0);
@@ -2920,6 +3454,37 @@ function animate() {
             : delta * 0.0002;
         co2Nivel += co2Rate;
         document.getElementById('co2-display').innerText = co2Nivel.toFixed(4);
+
+        // === FASE 3: LANTERNA E CONSUMO DE BATERIA ===
+        if (lanternaAtiva) {
+            bateriaNivel = Math.max(0.0, bateriaNivel - delta * (1 / 120)); // dura 120 segundos
+            if (bateriaNivel <= 0.0) {
+                lanternaAtiva = false;
+                if (lanternaRef) lanternaRef.intensity = 0.0;
+            } else if (bateriaNivel < 0.20) {
+                // Flicker sutil de bateria fraca
+                if (lanternaRef) {
+                    const pisca = Math.random() > 0.15;
+                    lanternaRef.intensity = pisca ? 1.8 * (bateriaNivel / 0.20) : 0.0;
+                }
+            } else {
+                if (lanternaRef) lanternaRef.intensity = 1.8;
+            }
+        }
+        
+        // Atualizar os elementos de UI da lanterna/pilhas
+        const flStatus = document.getElementById('flashlight-status');
+        const batDisplay = document.getElementById('battery-display');
+        const pilhasDisplay = document.getElementById('pilhas-display');
+        if (flStatus) {
+            flStatus.innerText = lanternaAtiva ? 'LIGADA' : (bateriaNivel <= 0.0 ? 'SEM BATERIA' : 'DESLIGADA');
+            flStatus.style.color = lanternaAtiva ? '#66ff66' : (bateriaNivel <= 0.0 ? '#ff4444' : '#6b612c');
+        }
+        if (batDisplay) {
+            batDisplay.innerText = Math.round(bateriaNivel * 100);
+            batDisplay.style.color = bateriaNivel < 0.2 ? '#ff4444' : '#6b612c';
+        }
+        if (pilhasDisplay) pilhasDisplay.innerText = quantidadePilhas;
 
         // === FASE 2E: SISTEMA DE ALARME CO2 ===
         const co2Display = document.getElementById('co2-display');
@@ -2998,9 +3563,28 @@ function animate() {
             }
         }
 
+        let pertoDePilha = false;
+        let pilhaPerto = null;
+        let menorDistPilha = Infinity;
+        for (const m of moveisArray) {
+            if (m.tipo === 'pilha' && !m.collected) {
+                const distP = camera.position.distanceTo(m.mesh.position);
+                if (distP < menorDistPilha) {
+                    menorDistPilha = distP;
+                    pilhaPerto = m;
+                }
+            }
+        }
+
         if (pertoDePortaEscura && menorDistPorta < 3.5) {
+            promptPorta.innerHTML = '⚠ ANOMALIA ESTRUTURAL ⚠<br><span style="font-size:0.55rem; opacity:0.6; letter-spacing:1px;">[E] NOCLIP</span>';
             promptPorta.style.display = 'block';
             promptPorta.style.opacity = String(Math.min(1, (3.5 - menorDistPorta) / 2.5));
+        } else if (pilhaPerto && menorDistPilha < 2.5) {
+            pertoDePilha = true;
+            promptPorta.innerHTML = '🔋 PILHA<br><span style="font-size:0.55rem; opacity:0.6; letter-spacing:1px;">[E] COLETAR</span>';
+            promptPorta.style.display = 'block';
+            promptPorta.style.opacity = '1';
         } else {
             promptPorta.style.display = 'none';
         }
@@ -3011,35 +3595,6 @@ function animate() {
             if (biquadFilter) biquadFilter.frequency.setValueAtTime(180, audioCtx.currentTime);
         }
 
-        // ——— INTERAÇÃO COM PORTA INTERATIVA (E = abrir/fechar) ———
-        if (interactPressed) {
-            let portaMaisProxima = null;
-            let menorDistPI = Infinity;
-            for (const pi of portasInterativas) {
-                const dx = camera.position.x - pi.x;
-                const dz = camera.position.z - pi.z;
-                const dist = Math.sqrt(dx * dx + dz * dz);
-                if (dist < menorDistPI) {
-                    menorDistPI = dist;
-                    portaMaisProxima = pi;
-                }
-            }
-
-            if (portaMaisProxima && menorDistPI < 3.5) {
-                interactPressed = false;
-                if (portaMaisProxima.trancada) {
-                    // Porta trancada — feedback visual
-                    const prompt = document.getElementById('prompt-porta');
-                    prompt.innerHTML = '🔒 TRANCADA';
-                    prompt.style.opacity = '1';
-                    setTimeout(() => { prompt.style.opacity = '0'; }, 1500);
-                } else {
-                    portaMaisProxima.aberta = !portaMaisProxima.aberta;
-                    portaMaisProxima.anguloAlvo = portaMaisProxima.aberta ? Math.PI / 2 : 0;
-                }
-            }
-        }
-
         // ——— ANIMAÇÃO DAS PORTAS (rotação suave) ———
         for (const pi of portasInterativas) {
             if (Math.abs(pi.anguloAtual - pi.anguloAlvo) > 0.01) {
@@ -3048,44 +3603,8 @@ function animate() {
             }
         }
 
-        // ——— NOCLIP: INTERAÇÃO COM PORTA ESCURA (teleporta entre andares) ———
+        // Decremento do cooldown de noclip
         if (noclipCooldown > 0) noclipCooldown -= delta;
-        if (interactPressed && pertoDePortaEscura && menorDistPorta < 3.5 && noclipCooldown <= 0) {
-            noclipCooldown = 4.0;
-            interactPressed = false;
-
-            // Alternar entre andares
-            const novoAndar = andarAtual === 0 ? 1 : 0;
-            const novaY = novoAndar === 0 ? 1.6 : (FLOOR1_BASE + 1.6);
-
-            // FASE 1: Blackout + audio spike
-            const noclipOv = document.getElementById('noclip-overlay');
-            noclipOv.style.transition = 'opacity 0.3s';
-            noclipOv.style.opacity = '1';
-            if (oscillator && audioCtx) {
-                oscillator.frequency.setValueAtTime(12, audioCtx.currentTime);
-                if (gainNode) gainNode.gain.setValueAtTime(0.45, audioCtx.currentTime);
-                if (biquadFilter) biquadFilter.frequency.setValueAtTime(60, audioCtx.currentTime);
-            }
-            document.getElementById('vhs-overlay').style.opacity = '1';
-
-            // FASE 2: Teleporte pro outro andar (após 600ms)
-            setTimeout(() => {
-                camera.position.y = novaY;
-                andarAtual = novoAndar;
-                velocity.set(0, 0, 0);
-            }, 600);
-
-            // FASE 3: Fade back (após 1.5s)
-            setTimeout(() => {
-                noclipOv.style.transition = 'opacity 1.2s';
-                noclipOv.style.opacity = '0';
-                if (gainNode && audioCtx) gainNode.gain.setValueAtTime(0.07, audioCtx.currentTime);
-                if (oscillator && audioCtx) oscillator.frequency.setValueAtTime(60, audioCtx.currentTime);
-                if (biquadFilter && audioCtx) biquadFilter.frequency.setValueAtTime(350, audioCtx.currentTime);
-                document.getElementById('vhs-overlay').style.opacity = document.getElementById('vhsSlider').value;
-            }, 1500);
-        }
 
         // ——— ILUMINAÇÃO: POOL DE 15 LUZES ———
         frameCount++;
@@ -3130,7 +3649,10 @@ function animate() {
         for (let i = 0; i < poolDeLuzesReais.length; i++) {
             const lObj = poolDeLuzesReais[i];
             const lum = lObj.assignedPanel;
-            if (!lum) continue;
+            if (!lum) {
+                if (lObj.gainNode && audioCtx) lObj.gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+                continue;
+            }
 
             const dist = lObj.light.position.distanceTo(camera.position);
 
@@ -3138,6 +3660,9 @@ function animate() {
                 const pisca = Math.random() > 0.5;
                 lObj.light.intensity = pisca ? 0.0 : baseLightIntensity * 0.5;
                 lum.mesh.material.color.setHex(pisca ? 0x222222 : 0xffffff);
+                if (lObj.gainNode && audioCtx) {
+                    lObj.gainNode.gain.setValueAtTime(pisca ? 0.0 : 0.12, audioCtx.currentTime);
+                }
             } else if (dist < 14 && Math.random() > perturbacao) {
                 playerFritandoLuz = true;
                 const apagar = Math.random() > 0.3;
@@ -3146,9 +3671,15 @@ function animate() {
                 if (oscillator && audioCtx) {
                     oscillator.frequency.setValueAtTime(apagar ? 35 : 60, audioCtx.currentTime);
                 }
+                if (lObj.gainNode && audioCtx) {
+                    lObj.gainNode.gain.setValueAtTime(apagar ? 0.0 : 0.08, audioCtx.currentTime);
+                }
             } else {
                 lObj.light.intensity = baseLightIntensity;
                 lum.mesh.material.color.setHex(0xffffff);
+                if (lObj.gainNode && audioCtx) {
+                    lObj.gainNode.gain.setValueAtTime(0.04, audioCtx.currentTime);
+                }
             }
         }
 
@@ -3190,11 +3721,62 @@ function animate() {
 
             // BFS pathfinding (a cada 20 frames)
             if (frameCount % 20 === 0 && gridRef) {
-                const pC = Math.clamp ? Math.clamp(Math.floor((camera.position.x + MAP_SIZE) / cellSize), 0, gridCols-1)
-                    : Math.max(0, Math.min(gridCols-1, Math.floor((camera.position.x + MAP_SIZE) / cellSize)));
+                const pC = Math.max(0, Math.min(gridCols-1, Math.floor((camera.position.x + MAP_SIZE) / cellSize)));
                 const pR = Math.max(0, Math.min(gridRows-1, Math.floor((camera.position.z + MAP_SIZE) / cellSize)));
-                entidadeWire.path = bfsPath(gridRef, gridRows, gridCols, entidadeWire.gridR, entidadeWire.gridC, pR, pC);
-                entidadeWire.pathIdx = 0;
+                
+                // Distância Manhattan aproximada em células
+                const distM = Math.abs(entidadeWire.gridR - pR) + Math.abs(entidadeWire.gridC - pC);
+                
+                // Limite de audição: correndo = 18 células, andando = 8 células, agachado = 2.5 células
+                const limiteAudicao = sprinting ? 18 : (agachado ? 2.5 : 8);
+                let detectado = distM < limiteAudicao;
+                
+                // Se agachado mas em linha de visão direta a menos de 10 células, também é detectado
+                if (!detectado && distM < 10) {
+                    const playerPos = camera.position.clone();
+                    const wirePos = entidadeWire.group.position.clone();
+                    wirePos.y = 1.0; // Altura aproximada do monstro
+                    
+                    const dirToPlayer = new THREE.Vector3().subVectors(playerPos, wirePos).normalize();
+                    const testRay = new THREE.Raycaster(wirePos, dirToPlayer, 0, wirePos.distanceTo(playerPos));
+                    
+                    // Checar se atinge alguma parede antes de chegar ao jogador
+                    const intersects = testRay.intersectObjects(scene.children, true);
+                    const wallHit = intersects.some(intersect => {
+                        // Se atingir um objeto estático (recebe sombras e não faz parte do monstro)
+                        return intersect.object.receiveShadow && !entidadeWire.group.getObjectById(intersect.object.id);
+                    });
+                    
+                    if (!wallHit) {
+                        detectado = true; // Linha de visão direta livre!
+                    }
+                }
+                
+                if (detectado) {
+                    entidadeWire.path = bfsPath(gridRef, gridRows, gridCols, entidadeWire.gridR, entidadeWire.gridC, pR, pC);
+                    entidadeWire.pathIdx = 0;
+                    entidadeWire.lastSeenR = pR;
+                    entidadeWire.lastSeenC = pC;
+                } else if (entidadeWire.lastSeenR !== undefined) {
+                    // Mover-se para o último local onde ouviu/viu o jogador
+                    entidadeWire.path = bfsPath(gridRef, gridRows, gridCols, entidadeWire.gridR, entidadeWire.gridC, entidadeWire.lastSeenR, entidadeWire.lastSeenC);
+                    entidadeWire.pathIdx = 0;
+                    if (entidadeWire.gridR === entidadeWire.lastSeenR && entidadeWire.gridC === entidadeWire.lastSeenC) {
+                        // Esquece a última posição se chegou lá
+                        delete entidadeWire.lastSeenR;
+                        delete entidadeWire.lastSeenC;
+                    }
+                } else {
+                    // Patrulha aleatória (escolhe uma célula vizinha conectada)
+                    const currentCell = gridRef[entidadeWire.gridR][entidadeWire.gridC];
+                    const conns = Object.keys(currentCell.conn);
+                    if (conns.length > 0) {
+                        const randomConn = conns[Math.floor(Math.random() * conns.length)];
+                        const [nr, nc] = randomConn.split(',').map(Number);
+                        entidadeWire.path = [[nr, nc]];
+                        entidadeWire.pathIdx = 0;
+                    }
+                }
             }
 
             // Movimento
@@ -3268,6 +3850,11 @@ function animate() {
                     stressLevel = 0;
                     co2Nivel = 0.041;
                     faseAlarme = 'normal';
+                    agachado = false;
+                    lanternaAtiva = false;
+                    bateriaNivel = 1.0;
+                    quantidadePilhas = 0;
+                    if (lanternaRef) lanternaRef.intensity = 0.0;
                     document.getElementById('co2-display').style.color = '#6b612c';
                     document.getElementById('co2-display').style.opacity = '1';
                     scene.fog.color.set('#2b2713');
@@ -3445,12 +4032,20 @@ function animate() {
         // Combinar stress + colapso pra efeitos visuais
         const efeitoTotal = Math.max(stressLevel, colapsoProgress);
 
-        // Tier 1 (0.3+): Tremor sutil via CSS
+        // Tier 1 (0.3+): Tremor sutil e Glitch de Cor/Tearing via CSS
         if (efeitoTotal > 0.3) {
             const tremAngle = Math.sin(time * 0.011) * efeitoTotal * 0.9;
-            renderer.domElement.style.transform = `rotate(${tremAngle}deg)`;
+            const shiftX = (Math.random() - 0.5) * efeitoTotal * 12.0; // horizontal glitching
+            renderer.domElement.style.transform = `rotate(${tremAngle}deg) translateX(${shiftX}px)`;
+            
+            // Glitch analógico de cores
+            const cont = 1.0 + (Math.random() - 0.5) * efeitoTotal * 0.5;
+            const sat = 1.0 - efeitoTotal * 0.4;
+            const hue = (Math.random() - 0.5) * efeitoTotal * 12.0;
+            renderer.domElement.style.filter = `contrast(${cont}) saturate(${sat}) hue-rotate(${hue}deg)`;
         } else {
             renderer.domElement.style.transform = '';
+            renderer.domElement.style.filter = '';
         }
 
         // Tier 2 (0.6+): Neblina engole, VHS intensifica
@@ -3517,6 +4112,11 @@ function animate() {
                 colapsoTimerNext = 45 + Math.random() * 45;
                 stressLevel = 0;
                 deathActive = false;
+                agachado = false;
+                lanternaAtiva = false;
+                bateriaNivel = 1.0;
+                quantidadePilhas = 0;
+                if (lanternaRef) lanternaRef.intensity = 0.0;
 
                 // Reset visual
                 camera.fov = 75;
@@ -3611,14 +4211,20 @@ if (isMobile) {
     document.getElementById('mobile-joystick').style.display = 'block';
     document.getElementById('mobile-interact').style.display = 'block';
     document.getElementById('mobile-jump').style.display = 'block';
+    document.getElementById('mobile-flashlight').style.display = 'block';
+    document.getElementById('mobile-reload').style.display = 'block';
     document.getElementById('hud-status').style.display = 'none';
 
     document.getElementById('btn-jogar').addEventListener('click', (e) => {
         e.stopImmediatePropagation();
         modoDevAtivo = false;
+        jogoIniciado = true;
+        if (!audioCtx) initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
         document.getElementById('painel-dev').style.display = 'none';
         document.getElementById('menu-inicial').style.display = 'none';
         document.getElementById('tela-pausa').style.display = 'none';
+        document.getElementById('hud-status').style.display = 'block';
     }, true);
 
     const joyBase = document.getElementById('mobile-joystick');
@@ -3666,7 +4272,7 @@ if (isMobile) {
     document.addEventListener('touchstart', e => {
         for(let i=0; i<e.touches.length; i++) {
             const t = e.touches[i];
-            if(t.clientX > window.innerWidth / 2 && t.target.id !== 'mobile-interact' && t.target.id !== 'mobile-jump') {
+            if(t.clientX > window.innerWidth / 2 && t.target.id !== 'mobile-interact' && t.target.id !== 'mobile-jump' && t.target.id !== 'mobile-flashlight' && t.target.id !== 'mobile-reload') {
                 lookStartX = t.clientX;
                 lookStartY = t.clientY;
                 yaw = camera.rotation.y;
@@ -3678,7 +4284,7 @@ if (isMobile) {
     document.addEventListener('touchmove', e => {
         for(let i=0; i<e.touches.length; i++) {
             const t = e.touches[i];
-            if(t.clientX > window.innerWidth / 2 && t.target.id !== 'mobile-interact' && t.target.id !== 'mobile-jump') {
+            if(t.clientX > window.innerWidth / 2 && t.target.id !== 'mobile-interact' && t.target.id !== 'mobile-jump' && t.target.id !== 'mobile-flashlight' && t.target.id !== 'mobile-reload') {
                 const dx = t.clientX - lookStartX;
                 const dy = t.clientY - lookStartY;
                 
@@ -3696,8 +4302,7 @@ if (isMobile) {
 
     document.getElementById('mobile-interact').addEventListener('touchstart', e => {
         e.preventDefault();
-        interactPressed = true;
-        setTimeout(() => interactPressed = false, 150);
+        interagir();
     });
 
     document.getElementById('mobile-jump').addEventListener('touchstart', e => {
@@ -3705,6 +4310,22 @@ if (isMobile) {
         if(isOnGround && !noclipAtivo) {
             velocidadeY = 5.5; 
             isOnGround = false;
+        }
+    });
+
+    document.getElementById('mobile-flashlight').addEventListener('touchstart', e => {
+        e.preventDefault();
+        lanternaAtiva = !lanternaAtiva;
+        if (lanternaRef) {
+            lanternaRef.intensity = lanternaAtiva ? (bateriaNivel > 0 ? 1.8 : 0) : 0;
+        }
+    });
+
+    document.getElementById('mobile-reload').addEventListener('touchstart', e => {
+        e.preventDefault();
+        if (quantidadePilhas > 0 && bateriaNivel < 1.0) {
+            quantidadePilhas--;
+            bateriaNivel = Math.min(1.0, bateriaNivel + 0.50);
         }
     });
 }
