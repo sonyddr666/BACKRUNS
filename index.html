@@ -689,8 +689,8 @@
                         oninput="document.getElementById('v-gigante').innerText=this.value">
                 </div>
                 <div class="dev-group">
-                    <label>Projetores <span id="v-proj">2</span></label>
-                    <input type="range" id="chProjetores" min="0" max="10" step="1" value="2"
+                    <label>Projetores <span id="v-proj">6</span></label>
+                    <input type="range" id="chProjetores" min="0" max="10" step="1" value="6"
                         oninput="document.getElementById('v-proj').innerText=this.value">
                 </div>
                 <div class="dev-group">
@@ -2336,6 +2336,63 @@
         // SEÇÃO 3E — PROJETOR ASYNC + ZONAS DE FALHA (FASE 2D)
         // ══════════════════════════════════════════════════════════════
 
+        const ZALGO_CHARS = [
+            '\u0300', '\u0301', '\u0302', '\u0303', '\u0304', '\u0305', '\u0306', '\u0307', '\u0308', '\u0309',
+            '\u030a', '\u030b', '\u030c', '\u030d', '\u030e', '\u030f', '\u0310', '\u0311', '\u0312', '\u0313',
+            '\u0314', '\u0315', '\u031a', '\u031b', '\u031c', '\u031d', '\u031e', '\u031f', '\u0320', '\u0321',
+            '\u0322', '\u0323', '\u0324', '\u0325', '\u0326', '\u0327', '\u0328', '\u0329', '\u032a', '\u032b',
+            '\u032c', '\u032d', '\u032e', '\u032f', '\u0330', '\u0331', '\u0332', '\u0333', '\u0334', '\u0335',
+            '\u0336', '\u0337', '\u0338', '\u0339', '\u033a', '\u033b', '\u033c', '\u033d', '\u033e', '\u033f',
+            '\u0340', '\u0341', '\u0342', '\u0343', '\u0344', '\u0345', '\u0346', '\u0347', '\u0348', '\u0349',
+            '\u034a', '\u034b', '\u034c', '\u034d', '\u034e', '\u034f', '\u0350', '\u0351', '\u0352', '\u0353',
+            '\u0354', '\u0355', '\u0356', '\u0357', '\u0358', '\u0359', '\u035a', '\u035b', '\u035c', '\u035d',
+            '\u035e', '\u035f', '\u0360', '\u0361', '\u0362', '\u0363', '\u0364', '\u0365', '\u0366', '\u0367',
+            '\u0368', '\u0369', '\u036a', '\u036b', '\u036c', '\u036d', '\u036e', '\u036f'
+        ];
+        const GLITCH_BLOCKS = ['█', '▓', '▒', '░', '▄', '▀', '▄▀', '░▒▓', '█▒░'];
+        const GLITCH_REPLACEMENTS = {
+            'A': ['A̷', 'A̶', 'A̶͑͠', 'A̶̟̲̭͑̃͛͑͗̎͠', 'A̶̟̲̭͑̃͛͑͗̎͠N̴'],
+            'E': ['E̵', 'E̵̛͌̓̓̀̓', 'Ḙ̵̛͌̓̈́̓̀̓', 'Ḙ̵̛͌̓̈́̓̀̓T̷̃'],
+            'O': ['O̷', 'O̷͛͌͝', 'O̷̠̟͛͌͗͗̎̕͝'],
+            'U': ['U̷', 'U̷͛͌', 'U̶'],
+            'I': ['I̷', 'I̷̛̱͋̈͗̒̋͝͝͠', 'Ḯ̸̛̠͑̅̏̀͌͒̕'],
+            'S': ['S̷', 'S̷E̷T̷O̷R̷'],
+            'R': ['R̷', 'R̷E̷S̷E̷A̷R̷C̷H̷'],
+            'T': ['T̷', 'T̷̲̃͋̀̏̋̕̚͘', 'T̸̙͋̅̽͋̃͘̕͘͝']
+        };
+
+        function corromperTexto(texto, nivel) {
+            let resultado = '';
+            for (let i = 0; i < texto.length; i++) {
+                const char = texto[i];
+                if (char === '\n' || char === '\r') {
+                    resultado += char;
+                    continue;
+                }
+                
+                if (Math.random() < nivel * 0.15) {
+                    resultado += GLITCH_BLOCKS[Math.floor(Math.random() * GLITCH_BLOCKS.length)];
+                    continue;
+                }
+
+                const uppercaseChar = char.toUpperCase();
+                if (GLITCH_REPLACEMENTS[uppercaseChar] && Math.random() < nivel * 0.4) {
+                    const pool = GLITCH_REPLACEMENTS[uppercaseChar];
+                    resultado += pool[Math.floor(Math.random() * pool.length)];
+                } else {
+                    resultado += char;
+                }
+
+                if (Math.random() < nivel * 0.8) {
+                    const numZalgo = Math.floor(Math.random() * (nivel * 12)) + 1;
+                    for (let j = 0; j < numZalgo; j++) {
+                        resultado += ZALGO_CHARS[Math.floor(Math.random() * ZALGO_CHARS.length)];
+                    }
+                }
+            }
+            return resultado;
+        }
+
         function criarProjetor(x, z, rot, type) {
             // Canvas dinâmica
             const canvas = document.createElement('canvas');
@@ -2397,39 +2454,50 @@
         function atualizarProjetor(proj, time) {
             const ctx = proj.ctx;
 
-            // Slides e cores baseados no tipo do projetor
+            // Slides e cores baseados no tipo do projetor (CAOS TOTAL E GLYPHS DOS INFERNOS)
             let slides = [];
             let textColor = '#88aaff';
             let gradStart = '#0a1428';
             let gradEnd = '#000000';
             let scanlineColor = 'rgba(0,0,0,0.3)';
             let glitchChance = 0.1;
+            let fontSize = 'bold 12px monospace';
 
             if (proj.type === 'terror') {
                 slides = [
-                    'ASYNC SYSTEM ERROR\nFILE CORRUPTED',
-                    'NÃO HÁ OUTRO LADO\nRETORNE IMEDIATAMENTE',
-                    'ELES ESTÃO OUVINDO\nAPAGUE A LANTERNA',
+                    // Slide 0: Mensagem de Erro de Sistema Viva
+                    'A̷S̷Y̷N̷C̷ ̷R̷E̷S̷E̷A̷R̷C̷H̷\nF̶A̶S̶E̶ ̶3̶:̶ ̶E̶X̶P̶A̶N̶S̶Ã̶̶O̶\nA̶̟̲̭͑̃͛͑͗̎͠Ņ̴̱̩̲̹͍͈͑͋͐͌͗̑̎͗̀̚O̷̠̟͛͌͗͗̎̕͝M̶̼͗̋̃͋̐͋̚͠A̴͇̾͌͊̔̽͗̕͠͝Ḻ̸̔͑͒͑́́͒̕͝I̷̛̱͋̈͗̒̋͝͝͠Ä̸̛̠́͑̅̏̀͌͒̕ ̷̗̌̓̿̏̆̎̏͑̕D̷͎̀́̾͒̅̈́̊̕Ḙ̵̛͌̓̈́̓̀̓T̷̲̃͋̀̏̋̕̚͘E̷̙̓́́̐͗̄̎̕C̸̰̔͑̽̆͛̀͘͝T̸̙͋̅̽͋̃͘̕͘͝A̸̛̟̿̍̔̌́͊̕̕D̶͈́̂̾̑̿̕̕̚Á̵͙͒͗́͋̅͊͘͝',
+                    // Slide 1: O Comando do Umbral
+                    'N̵̨̧̝̰̗͕̟̼̱̤̹̤̰̼͖̟̝̺͈͍̗̭̹̱̟̺͑͂̔̃͊̓̿͗̉̽̏̽̓͗͂͂̅̒̇͗Ą̶̨̙̯̤̲̼̣͖̱̼̮̰̯͉͉̤͍͉̲̣̭̗̬͚̬͗͆͛̀͑̔̈́̃͂̍͌͋͒͗́̋́̀̎̀̃̀͂̆̋̾̋̍̎͂̎̿̈ͅÖ̷͚̠̜͖̼̹͚̺̤̹̦͎͇̝͚̣̺͇́̾̈́̈́̅̆̈́̓̑̔̏̒͆̈̅̑́̃͛́̍̈́̽́͂̒̉͛̽̈́̚͜͝͝͠ ̶̨̡̯̗̪̝̝͇͚̮̭̲̲̩̱̼̤͈̺͍̭͕̣̻̟͙̼̰̻̬̰̤̺̓̅̂̃̽́̀̃͗̑̊̇͐̊̇͋̅̈́̉̑̌̉͋͌̎͐͗̀̔̄͘̚͘͝ͅǪ̸̠̮̞̦̙͓̜̲̥̪̭̥̼̤̺̱̫̠͈͈͎͈͚͔̝̫̠̲͓̹̾̽͑̀͆̽͌̂͗̎̌̂͛̐̂͋͗̉̑͗̈͛̆̎̅͆́̔̑͐͛̿͘͜͠͝L̶̢̢̨̢̢̧̡̡̛̝̰̣̤̳͉̰̭͓̥̳͉̫̫̝̱͉̞̲͚̻̳̎́̆̅̌̉̿̌͗̇̓̀́̈͗̋̿̿͐̈̎͆̑̑̈̉̓̿̈̽̔͘̚͜͝ͅͅH̸̡̨̧̛̛̛̞̣͙͓͎̬̳͖͓̥̰̼̱͙̱͕͈̼̪͈͎̱̙̰̎͂̀̌̏̄͂͐͗͋̓͆̆̐̐̈́̔̔̅̿̇̏͆͆̌͊͑̾̚̚̕͜͜͜͝ͅȄ̸̡̨̝͉̭͔͉̯̜͔̲͖͇͔̝̬̲͉͉̞͉̪̲̲̦͎̠̹͇̱͖̀̒̉̈̇̂̏̊̂̎͌̀̑̽̌̿̈̒̓͒̓̒̈̀͛́͐̽̚͘̕͝͠͝ͅ ̸̱̰͇͎̱͎̭̗͔̞̠͕̣̫̮̰̗͈̱͉̥̺͉͖̥͉͕̱̝̗̪̰͈̐̉̽̾͂͐͑̂̀͛͛͊́̔̽̓̓̈̑͛̓͑̋̈̆̀̽̏̌͂̈́̿͠͝͝P̴̢̡̧̛̝̫̭̳̟̺͓͇̲̮̱̹̲͈̯̳̥̯͈̮͇̬̫̰̦̙͋͌̑̎̇̄̅̾̇̃̔̓̽̈̅̏̆̀̒͆̄͑̅̓̿̇̾̌͌͗̀̕͝͠ͅͅR̴̡̨̡̡̡̛͓̼̙̜͕͙̤͙͉̙͉̪͙͔̠͇͔̜̣͙̪̼͈͙̗̰̹͕̅̆̋̈́͋̎͐̔̇͆͗͂͋͂̉͌͗̈́̃͛̑͋͗̇͆̓͑̇̒̓͘̚͜͝͠A̶̢̡̧̡̼̯̖̹͙̯͕̭̪̙̹̯̝͖̠̠̬̤̮̠̖̮͔͖̲̲̟̖̰̠͒̈͗̇̐̇͌̾́̄̐̊̓̏̓̃̉̈́̄͊̈́́̐̇͗̎̌̊͂̑̿̄̆͜͝͝ ̸̢̡̧̡̟̩̳̞̙̞̭̪̺̰̬̲͎̯͇͎̗̱͙͈͙͕͇̜̱̪̣̣̝͗̇̉͊̈́̋̀̉̋̅̓́̊̓̾́͌͊̔͑̎̐͑̿̈̚̚̚͜͠͠͝͝͝͠Ţ̸̨̢̥̬̰̳͈̜͔͖͖̺̣̟̭̼͙͚̦͖͎͖̦̹̫̹̦͖͉̭̤̠̎̎̀̅̓́̇̉̈́̌̄̀̔̈́̎̾̅͊͒̊̈́͌̎͆̈͗͌́̚̚͘͘͘͜͝͝ͅE̷̢̢̺̖͚̟̮̦͚̞͎͇̰̥̱͙̪͚̲̭̜̠͕͈̜̖̣͖̜̮̥̺̍̉̀̓̉̂͌̋̊͆͑̅͐̂̈́́͆̔̈́̾̌̊̐͂̔̓̇̍̚͝͝͝͝͝͠ͅͅL̷̨̡̡̛̛̤͔̱̰͚̞̖̭͙͈̰̺̙͚̣̮͔̖͓͚̦̙͇̗͇̦̜͈͚̤̓̓̃̊͗̓̌̏̽̔͐̊̉̓̿͋̿́̉͒́̆̀̃̈́͒̈̽͘̚̚͜͝͠Ą̷̢̢̛͍̫͍̙̫̗̗̝͕̯̬̳̲̗̳̪̬̠̱̫̲̰̬̖͕̣̥̫̖͇͎̓̀̉̀̈́̏̓̂͌̀͗͊̓̉͆̈́̀̿͆̾͑̀͊͗̈́̀͛̀͑͛̉̚͘͜͝',
+                    // Slide 2: Realidade Corrompida + Zalgo Dinâmico
+                    'REALIDADE DETONADA\nFALHA NO RECURSO DE SEGURANÇA\nNÃO HÁ VOLTA\nRUN RUN RUN RUN RUN',
+                    // Slide 3: STATIC
                     'STATIC'
                 ];
-                textColor = '#ff3333'; // Vermelho sangue
-                gradStart = '#1a0000';  // Fundo avermelhado doentio
+                textColor = '#ff3333';
+                gradStart = '#200000';
                 gradEnd = '#000000';
-                scanlineColor = 'rgba(0,0,0,0.45)';
-                glitchChance = 0.25;   // Muito mais instável e espasmódico
+                scanlineColor = 'rgba(0,0,0,0.55)';
+                glitchChance = 0.35;
+                fontSize = 'bold 9px monospace';
             } else {
                 // scifi
                 slides = [
-                    'QUANTUM OVERLAP\nSYSTEM ACTIVE',
-                    'MATRIX TRANSLATION\nCOORD: 45.908.12',
-                    'REALITY INTEGRITY\nFAILING DETECTED',
+                    // Slide 0: Código fonte amaldiçoado
+                    'function atualizarProjetor() {\n    let ̸a̴n̵o̷m̵a̶l̸i̸a̷ = Math.random() * 666;\n    if (d̶e̷s̶e̶s̶p̶e̶r̶o̶ > 100) {\n        // T̷H̷E̷ ̷V̷O̷I̷D̷ ̷I̷S̷ ̷L̷O̷U̷D̷E̷R̷\n        proj.texture.needsUpdate = d̷e̷a̷d̷;\n        window.reality = null;\n    }\n    return "Z̷A̷L̷G̷O̷";\n}',
+                    // Slide 1: Glitch de bloco com formatação estourada
+                    '[SYSTEM_FAILURE] █▀█ █▄█ ▀█▀\nK̸V̶3̴1̸ ̸≠ ̷T̷R̷U̷E̷\n░░░░▒▒▒▒▓▓▓▓ ERROR 0x000000F\n[A R E   Y O U   A L I V E ?]',
+                    // Slide 2: Sobrescrita de Bloco
+                    '▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄\nS̷E̷T̷O̷R̷ ̷7̷ ̷N̷A̷O̷ ̷E̷X̷I̷S̷T̷E̷\n█▒░▒█▒░▒█▒░▒█▒░▒█▒░▒█\n▒▒▒▒▒▒▒▒ static_noise.exe',
+                    // Slide 3: STATIC
                     'STATIC'
                 ];
-                textColor = '#11ff77'; // Verde fósforo
-                gradStart = '#001a0d';  // Fundo esverdeado terminal antigo
+                textColor = '#00ff66';
+                gradStart = '#00150a';
                 gradEnd = '#000000';
-                scanlineColor = 'rgba(0,0,0,0.25)';
-                glitchChance = 0.08;
+                scanlineColor = 'rgba(0,0,0,0.3)';
+                glitchChance = 0.15;
+                fontSize = 'bold 9px monospace';
             }
 
             proj.timer++;
@@ -2440,16 +2508,16 @@
             const slide = slides[proj.slideIdx];
 
             if (slide === 'STATIC') {
-                // Estática
+                // Estática total (Estética do Vazio)
                 const imgData = ctx.createImageData(256, 160);
                 const noiseMax = proj.type === 'terror' ? 40 : 80;
                 for (let i = 0; i < imgData.data.length; i += 4) {
                     const v = Math.random() * noiseMax;
                     if (proj.type === 'terror') {
-                        // Estática vermelha/sombria
+                        // Estática vermelha/sombria do umbral
                         imgData.data[i] = v * 1.5;
-                        imgData.data[i + 1] = v * 0.2;
-                        imgData.data[i + 2] = v * 0.2;
+                        imgData.data[i + 1] = v * 0.25;
+                        imgData.data[i + 2] = v * 0.25;
                     } else {
                         // Estática verde/digital
                         imgData.data[i] = v * 0.2;
@@ -2459,6 +2527,28 @@
                     imgData.data[i + 3] = 255;
                 }
                 ctx.putImageData(imgData, 0, 0);
+
+                // Módulo 3: Caos Visceral - Fragments binários que flutuam aleatoriamente em cima do chiado
+                if (Math.random() < 0.45) {
+                    ctx.fillStyle = proj.type === 'terror' ? 'rgba(255, 0, 0, 0.8)' : 'rgba(0, 255, 0, 0.8)';
+                    ctx.font = 'bold 10px monospace';
+                    ctx.fillText(corromperTexto('01111001 01101111 01110101', 0.2), Math.random() * 120 + 20, Math.random() * 140 + 10);
+                }
+                if (Math.random() < 0.35) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 11px monospace';
+                    ctx.fillText(corromperTexto('O8111IᗷO§TᗷE1TᗷE1TᗷE1TᗷE1E81E81I1', 0.3), Math.random() * 60, Math.random() * 140 + 10);
+                }
+
+                // Palavra piscante a cada 0.2s (12 frames)
+                if (Math.floor(proj.timer / 12) % 2 === 0) {
+                    ctx.fillStyle = proj.type === 'terror' ? '#ff3333' : '#ffffff';
+                    ctx.font = 'bold 14px monospace';
+                    ctx.textAlign = 'center';
+                    const palavraCrua = Math.random() > 0.5 ? 'OᗷSOLETE.' : '01110010 01100101 01110011 01101001 01110011 01110100';
+                    const palavra = corromperTexto(palavraCrua, 0.3);
+                    ctx.fillText(palavra, 128, 80);
+                }
             } else {
                 // Fundo gradiente
                 const grad = ctx.createLinearGradient(0, 0, 0, 160);
@@ -2467,25 +2557,91 @@
                 ctx.fillStyle = grad;
                 ctx.fillRect(0, 0, 256, 160);
 
-                // Texto
-                ctx.fillStyle = textColor;
-                ctx.font = 'bold 13px monospace';
+                // Texto com fontes e tremores customizados
                 ctx.textAlign = 'center';
                 const lines = slide.split('\n');
-                lines.forEach((line, i) => {
-                    ctx.fillText(line, 128, 70 + i * 25);
-                });
 
-                // Scanlines
-                ctx.fillStyle = scanlineColor;
+                if (proj.type === 'terror' && proj.slideIdx === 0) {
+                    // MENSAGEM DE ERRO DE SISTEMA VIVA
+                    ctx.fillStyle = '#ff2222';
+                    ctx.font = 'bold 9px monospace';
+                    lines.forEach((line, i) => {
+                        const corrupted = corromperTexto(line, 0.15);
+                        ctx.fillText(corrupted, 128, 45 + i * 30);
+                    });
+                } else if (proj.type === 'terror' && proj.slideIdx === 1) {
+                    // O COMANDO DO UMBRAL: O texto treme (não para) e tem tom branco doentio
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 9px monospace';
+                    const shakeX = (Math.random() - 0.5) * 5;
+                    const shakeY = (Math.random() - 0.5) * 5;
+                    lines.forEach((line, i) => {
+                        const corrupted = corromperTexto(line, 0.05);
+                        ctx.fillText(corrupted, 128 + shakeX, 55 + i * 28 + shakeY);
+                    });
+                } else if (proj.type === 'terror' && proj.slideIdx === 2) {
+                    // REALIDADE DETONADA: Piscando a cada 0.4s, rastro senoidal
+                    if (Math.floor(proj.timer / 24) % 2 === 0) {
+                        ctx.fillStyle = '#ff0033';
+                        ctx.font = 'bold 10px monospace';
+                        lines.forEach((line, i) => {
+                            const traceX = Math.sin(time * 0.04 + i) * 8;
+                            const corrupted = corromperTexto(line, 0.35);
+                            ctx.fillText(corrupted, 128 + traceX, 40 + i * 28);
+                        });
+                    }
+                } else if (proj.type === 'scifi' && proj.slideIdx === 0) {
+                    // PAINEL A: Loop de código fonte amaldiçoado subindo verticalmente
+                    ctx.fillStyle = '#00ff66';
+                    ctx.font = '8px monospace';
+                    ctx.textAlign = 'left';
+                    const scrollY = (proj.timer * 1.5) % 180;
+                    
+                    lines.forEach((line, i) => {
+                        const corrupted = corromperTexto(line, 0.08);
+                        let y = 160 - scrollY + i * 14;
+                        if (y < -20) y += 200; // warp around
+                        if (y > 180) y -= 200;
+                        ctx.fillText(corrupted, 15, y);
+                    });
+                } else if (proj.type === 'scifi' && proj.slideIdx === 1) {
+                    // PAINEL B: Glitch de bloco com formatação estourada e scanlines fortes
+                    ctx.fillStyle = '#88ffaa';
+                    ctx.font = 'bold 9px monospace';
+                    lines.forEach((line, i) => {
+                        const corrupted = corromperTexto(line, 0.15);
+                        ctx.fillText(corrupted, 128, 45 + i * 26);
+                    });
+                } else if (proj.type === 'scifi' && proj.slideIdx === 2) {
+                    // SOBRESCRITA DE BLOCO
+                    ctx.fillStyle = '#00ffcc';
+                    ctx.font = 'bold 9px monospace';
+                    lines.forEach((line, i) => {
+                        const corrupted = corromperTexto(line, 0.2);
+                        ctx.fillText(corrupted, 128, 45 + i * 28);
+                    });
+                } else {
+                    ctx.fillStyle = textColor;
+                    ctx.font = fontSize;
+                    lines.forEach((line, i) => {
+                        ctx.fillText(line, 128, 65 + i * 25);
+                    });
+                }
+
+                // Scanlines (para o painel B, opacidade maior de 70% se for o slide 1 de scifi)
+                const isPanelB = (proj.type === 'scifi' && proj.slideIdx === 1);
+                ctx.fillStyle = isPanelB ? 'rgba(0,0,0,0.7)' : scanlineColor;
                 for (let y = 0; y < 160; y += 3) {
                     ctx.fillRect(0, y, 256, 1);
                 }
 
-                // Glitch aleatório
-                if (Math.random() < glitchChance) {
-                    const gy = Math.floor(Math.random() * 140);
-                    const gh = 3 + Math.floor(Math.random() * 8);
+                // Glitch aleatório (35% para terror, 5% focado em uma linha se for o painel B)
+                let actualGlitchChance = glitchChance;
+                if (isPanelB) actualGlitchChance = 0.05;
+
+                if (Math.random() < actualGlitchChance) {
+                    const gy = isPanelB ? 70 : Math.floor(Math.random() * 140);
+                    const gh = isPanelB ? 20 : 3 + Math.floor(Math.random() * 8);
                     const gx = Math.floor(Math.random() * (proj.type === 'terror' ? 30 : 16)) - (proj.type === 'terror' ? 15 : 8);
                     const strip = ctx.getImageData(0, gy, 256, gh);
                     ctx.putImageData(strip, gx, gy);
@@ -3140,11 +3296,11 @@
             gerarMoveis(grid, rooms, rows, cols, cellSize, 0);
 
             // ——— FASE 2D: PROJETORES ASYNC ———
-            const maxProj = parseInt(document.getElementById('chProjetores')?.value) || 2;
+            const maxProj = parseInt(document.getElementById('chProjetores')?.value) || 6;
             let projCount = 0;
             for (const rm of rooms) {
-                if (rm.size !== 3 || rm.temCadeiraGigante || projCount >= maxProj) continue;
-                if (Math.random() > 0.5) continue;
+                if (rm.size < 2 || rm.temCadeiraGigante || projCount >= maxProj) continue;
+                if (Math.random() > 0.7) continue; // 70% de chance de colocar projetor na sala elegível
                 const px = cellX(rm.c) + (rm.size - 1) * cellSize * 0.25;
                 const pz = cellZ(rm.r) - rm.size * cellSize * 0.4;
                 criarProjetor(px, pz, 0);
@@ -5910,17 +6066,23 @@
                 // Combinar stress + colapso pra efeitos visuais
                 const efeitoTotal = Math.max(stressLevel, colapsoProgress);
 
-                // Tier 1 (0.3+): Tremor sutil e Glitch de Cor/Tearing via CSS
-                if (efeitoTotal > 0.3) {
-                    const tremAngle = Math.sin(time * 0.011) * efeitoTotal * 0.9;
-                    const shiftX = (Math.random() - 0.5) * efeitoTotal * 12.0; // horizontal glitching
-                    renderer.domElement.style.transform = `rotate(${tremAngle}deg) translateX(${shiftX}px)`;
+                // === COLPASO ESTÉTICO CRÍTICO VIA CSS (TIER GLITCH ADVANCED) ===
+                if (efeitoTotal > 0.25) {
+                    const tremAngle = Math.sin(time * 0.05) * efeitoTotal * 2.5; // Tremor muito mais violento
+                    const shiftX = (Math.random() - 0.5) * efeitoTotal * 35.0;  // Tearing horizontal estourado
+                    const shiftY = Math.random() > 0.85 ? (Math.random() - 0.5) * efeitoTotal * 50.0 : 0; // Pulo de frame vertical
+                    
+                    renderer.domElement.style.transform = `rotate(${tremAngle}deg) translateX(${shiftX}px) translateY(${shiftY}px) scale(${1 + efeitoTotal * 0.1})`;
 
-                    // Glitch analógico de cores
-                    const cont = 1.0 + (Math.random() - 0.5) * efeitoTotal * 0.5;
-                    const sat = 1.0 - efeitoTotal * 0.4;
-                    const hue = (Math.random() - 0.5) * efeitoTotal * 12.0;
-                    renderer.domElement.style.filter = `contrast(${cont}) saturate(${sat}) hue-rotate(${hue}deg)`;
+                    // Distorção cromática simulada por filtros de contraste e hue quântico
+                    const cont = 1.0 + (Math.random() - 0.5) * efeitoTotal * 1.5;
+                    const sat = 1.0 + efeitoTotal * 2.0; // Cores estouradas e radioativas ao invés de mortas
+                    const hue = Math.sin(time * 0.005) * efeitoTotal * 45.0; // A tela muda de cor conforme o desespero
+                    
+                    // Inversão de cor fantasma (piscada de 1 frame estilo monitor quebrando)
+                    const invert = Math.random() > 0.96 ? 'invert(1)' : 'invert(0)';
+                    
+                    renderer.domElement.style.filter = `contrast(${cont}) saturate(${sat}) hue-rotate(${hue}deg) ${invert} blur(${efeitoTotal * 1.5}px)`;
                 } else {
                     renderer.domElement.style.transform = '';
                     renderer.domElement.style.filter = '';
