@@ -6292,6 +6292,29 @@
                         scene.fog.density = parseFloat(document.getElementById('fogDensity').value);
                     }
                 }
+
+                // === CORRUPÇÃO DE HUD DINÂMICA ===
+                if (frameCount % 5 === 0) { // Não pesa na CPU rodando a cada 5 frames
+                    const co2DisplayEl = document.getElementById('co2-display');
+                    const radioDisplayEl = document.getElementById('radio-display');
+                    
+                    if (efeitoTotal > 0.4 && co2DisplayEl) {
+                        // A estabilidade vira um número bugado ou caracteres aleatórios
+                        if (Math.random() > 0.7) {
+                            const bugs = ['☠%', '∅%', 'ERR', 'NaN', '¿?', '⛥'];
+                            co2DisplayEl.innerText = bugs[Math.floor(Math.random() * bugs.length)];
+                            co2DisplayEl.style.color = '#ff0000';
+                        }
+                    }
+                    
+                    if (faseAlarme === 'vermelho' && radioDisplayEl) {
+                        // O rádio scanner capta frequências do além
+                        const vozesDoUmbral = ['E̸L̶E̶ ̶V̶E̶M̶', 'N̶A̶O̶ ̶O̶L̶H̶E̶', 'S̵I̷L̶E̷N̷C̶I̶O̶', '00000000', '҂҂҂҂'];
+                        if (Math.random() > 0.5) {
+                            radioDisplayEl.innerText = `SCANNER: [${vozesDoUmbral[Math.floor(Math.random() * vozesDoUmbral.length)]}]`;
+                        }
+                    }
+                }
             }
 
             // === MONITOR AO VIVO (a cada 30 frames, só se painel visível) ===
@@ -6337,29 +6360,6 @@
                 if (monFor) {
                     monFor.innerText = colapsoForcado ? 'MORTE CERTA' : 'NÃO';
                     monFor.style.color = colapsoForcado ? '#ff2222' : '#66ff66';
-                }
-            }
-
-            // === CORRUPÇÃO DE HUD DINÂMICA ===
-            if (frameCount % 5 === 0) { // Não pesa na CPU rodando a cada 5 frames
-                const co2DisplayEl = document.getElementById('co2-display');
-                const radioDisplayEl = document.getElementById('radio-display');
-                
-                if (efeitoTotal > 0.4 && co2DisplayEl) {
-                    // A estabilidade vira um número bugado ou caracteres aleatórios
-                    if (Math.random() > 0.7) {
-                        const bugs = ['☠%', '∅%', 'ERR', 'NaN', '¿?', '⛥'];
-                        co2DisplayEl.innerText = bugs[Math.floor(Math.random() * bugs.length)];
-                        co2DisplayEl.style.color = '#ff0000';
-                    }
-                }
-                
-                if (faseAlarme === 'vermelho' && radioDisplayEl) {
-                    // O rádio scanner capta frequências do além
-                    const vozesDoUmbral = ['E̸L̶E̶ ̶V̶E̶M̶', 'N̶A̶O̶ ̶O̶L̶H̶E̶', 'S̵I̷L̶E̷N̷C̶I̶O̶', '00000000', '҂҂҂҂'];
-                    if (Math.random() > 0.5) {
-                        radioDisplayEl.innerText = `SCANNER: [${vozesDoUmbral[Math.floor(Math.random() * vozesDoUmbral.length)]}]`;
-                    }
                 }
             }
 
