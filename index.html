@@ -2349,6 +2349,7 @@
             '\u035e', '\u035f', '\u0360', '\u0361', '\u0362', '\u0363', '\u0364', '\u0365', '\u0366', '\u0367',
             '\u0368', '\u0369', '\u036a', '\u036b', '\u036c', '\u036d', '\u036e', '\u036f'
         ];
+        const glyphsZalgo = ['⛥', 'ψ', '☠', '☣', '☤', '҂', '꠵', '𝀿', '🜏', '█', '▓', '░', 'Ø', '§', '☣', '⚠'];
         const GLITCH_BLOCKS = ['█', '▓', '▒', '░', '▄', '▀', '▄▀', '░▒▓', '█▒░'];
         const GLITCH_REPLACEMENTS = {
             'A': ['A̷', 'A̶', 'A̶͑͠', 'A̶̟̲̭͑̃͛͑͗̎͠', 'A̶̟̲̭͑̃͛͑͗̎͠N̴'],
@@ -2624,7 +2625,17 @@
                     ctx.fillStyle = textColor;
                     ctx.font = fontSize;
                     lines.forEach((line, i) => {
-                        ctx.fillText(line, 128, 65 + i * 25);
+                        if (proj.type === 'terror' || Math.random() > 0.85) {
+                            let charArray = line.split('');
+                            for (let j = 0; j < charArray.length; j++) {
+                                if (Math.random() > 0.90) { // 10% de chance de cada caractere virar um bug vivo
+                                    charArray[j] = glyphsZalgo[Math.floor(Math.random() * glyphsZalgo.length)];
+                                }
+                            }
+                            line = charArray.join('');
+                        }
+                        const traceX = proj.type === 'terror' ? Math.sin(time * 0.05 + i) * 8 : 0;
+                        ctx.fillText(line, 128 + traceX, 65 + i * 25);
                     });
                 }
 
@@ -3300,11 +3311,73 @@
             let projCount = 0;
             for (const rm of rooms) {
                 if (rm.size < 2 || rm.temCadeiraGigante || projCount >= maxProj) continue;
-                if (Math.random() > 0.7) continue; // 70% de chance de colocar projetor na sala elegível
-                const px = cellX(rm.c) + (rm.size - 1) * cellSize * 0.25;
-                const pz = cellZ(rm.r) - rm.size * cellSize * 0.4;
-                criarProjetor(px, pz, 0);
-                projCount++;
+                if (Math.random() > 0.7) continue;
+
+                // Coletar pontos de ancoragem válidos nas paredes sólidas da sala (que não tenham conexões)
+                let ancors = [];
+
+                // 1. Parede Norte (r = rm.r)
+                {
+                    const r = rm.r;
+                    for (let c = rm.c; c < rm.c + rm.size; c++) {
+                        if (r === 0 || !grid[r][c].conn[(r - 1) + ',' + c]) {
+                            ancors.push({
+                                x: cellX(c),
+                                z: edgeZ(r) + 0.05,
+                                rot: 0
+                            });
+                        }
+                    }
+                }
+
+                // 2. Parede Sul (r = rm.r + rm.size - 1)
+                {
+                    const r = rm.r + rm.size - 1;
+                    for (let c = rm.c; c < rm.c + rm.size; c++) {
+                        if (r === rows - 1 || !grid[r][c].conn[(r + 1) + ',' + c]) {
+                            ancors.push({
+                                x: cellX(c),
+                                z: edgeZ(r + 1) - 0.05,
+                                rot: Math.PI
+                            });
+                        }
+                    }
+                }
+
+                // 3. Parede Oeste (c = rm.c)
+                {
+                    const c = rm.c;
+                    for (let r = rm.r; r < rm.r + rm.size; r++) {
+                        if (c === 0 || !grid[r][c].conn[r + ',' + (c - 1)]) {
+                            ancors.push({
+                                x: edgeX(c) + 0.05,
+                                z: cellZ(r),
+                                rot: Math.PI / 2
+                            });
+                        }
+                    }
+                }
+
+                // 4. Parede Leste (c = rm.c + rm.size - 1)
+                {
+                    const c = rm.c + rm.size - 1;
+                    for (let r = rm.r; r < rm.r + rm.size; r++) {
+                        if (c === cols - 1 || !grid[r][c].conn[r + ',' + (c + 1)]) {
+                            ancors.push({
+                                x: edgeX(c + 1) - 0.05,
+                                z: cellZ(r),
+                                rot: -Math.PI / 2
+                            });
+                        }
+                    }
+                }
+
+                // Se houver opções de ancoragem, escolhe uma aleatória para fixar o projetor
+                if (ancors.length > 0) {
+                    const chosen = ancors[Math.floor(Math.random() * ancors.length)];
+                    criarProjetor(chosen.x, chosen.z, chosen.rot);
+                    projCount++;
+                }
             }
 
             // ——— FASE 2D: ZONAS DE FALHA INFINITA ———
@@ -6264,6 +6337,29 @@
                 if (monFor) {
                     monFor.innerText = colapsoForcado ? 'MORTE CERTA' : 'NÃO';
                     monFor.style.color = colapsoForcado ? '#ff2222' : '#66ff66';
+                }
+            }
+
+            // === CORRUPÇÃO DE HUD DINÂMICA ===
+            if (frameCount % 5 === 0) { // Não pesa na CPU rodando a cada 5 frames
+                const co2DisplayEl = document.getElementById('co2-display');
+                const radioDisplayEl = document.getElementById('radio-display');
+                
+                if (efeitoTotal > 0.4 && co2DisplayEl) {
+                    // A estabilidade vira um número bugado ou caracteres aleatórios
+                    if (Math.random() > 0.7) {
+                        const bugs = ['☠%', '∅%', 'ERR', 'NaN', '¿?', '⛥'];
+                        co2DisplayEl.innerText = bugs[Math.floor(Math.random() * bugs.length)];
+                        co2DisplayEl.style.color = '#ff0000';
+                    }
+                }
+                
+                if (faseAlarme === 'vermelho' && radioDisplayEl) {
+                    // O rádio scanner capta frequências do além
+                    const vozesDoUmbral = ['E̸L̶E̶ ̶V̶E̶M̶', 'N̶A̶O̶ ̶O̶L̶H̶E̶', 'S̵I̷L̶E̷N̷C̶I̶O̶', '00000000', '҂҂҂҂'];
+                    if (Math.random() > 0.5) {
+                        radioDisplayEl.innerText = `SCANNER: [${vozesDoUmbral[Math.floor(Math.random() * vozesDoUmbral.length)]}]`;
+                    }
                 }
             }
 
