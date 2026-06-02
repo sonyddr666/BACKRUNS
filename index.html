@@ -2336,7 +2336,7 @@
         // SEÇÃO 3E — PROJETOR ASYNC + ZONAS DE FALHA (FASE 2D)
         // ══════════════════════════════════════════════════════════════
 
-        function criarProjetor(x, z, rot) {
+        function criarProjetor(x, z, rot, type) {
             // Canvas dinâmica
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 160;
@@ -2369,13 +2369,26 @@
                 objetosDinamicos.push(f);
             }
 
-            // Luz azul sutil
-            const light = new THREE.PointLight(0x3355ff, 0.4, 5);
+            const projType = type || (Math.random() > 0.5 ? 'terror' : 'scifi');
+
+            // Luz baseada no tipo de projetor
+            let lightColor = 0x3355ff;
+            let lightIntensity = 0.4;
+            if (projType === 'terror') {
+                lightColor = 0xcc0000;
+                lightIntensity = 0.7;
+            } else if (projType === 'scifi') {
+                lightColor = 0x11ff77;
+                lightIntensity = 0.5;
+            }
+
+            // Luz colorida sutil
+            const light = new THREE.PointLight(lightColor, lightIntensity, 5);
             light.position.set(x, 2.0, z + (rot === 0 ? 1 : 0));
             scene.add(light);
             objetosDinamicos.push(light);
 
-            const proj = { mesh: tela, canvas, ctx, texture, slideIdx: 0, timer: 0, light, x, z };
+            const proj = { mesh: tela, canvas, ctx, texture, slideIdx: 0, timer: 0, light, x, z, type: projType };
             projetores.push(proj);
             criarAudioProjetor(tela); // ÁUDIO POSICIONAL 3D
             return proj;
@@ -2383,12 +2396,41 @@
 
         function atualizarProjetor(proj, time) {
             const ctx = proj.ctx;
-            const slides = [
-                'ASYNC RESEARCH\nPROJECT KV31',
-                'EXPANSÃO DIMENSIONAL\nFASE 3',
-                '⚠ ANOMALIA DETECTADA\nSETOR 7',
-                'STATIC' // tela de estática
-            ];
+
+            // Slides e cores baseados no tipo do projetor
+            let slides = [];
+            let textColor = '#88aaff';
+            let gradStart = '#0a1428';
+            let gradEnd = '#000000';
+            let scanlineColor = 'rgba(0,0,0,0.3)';
+            let glitchChance = 0.1;
+
+            if (proj.type === 'terror') {
+                slides = [
+                    'ASYNC SYSTEM ERROR\nFILE CORRUPTED',
+                    'NÃO HÁ OUTRO LADO\nRETORNE IMEDIATAMENTE',
+                    'ELES ESTÃO OUVINDO\nAPAGUE A LANTERNA',
+                    'STATIC'
+                ];
+                textColor = '#ff3333'; // Vermelho sangue
+                gradStart = '#1a0000';  // Fundo avermelhado doentio
+                gradEnd = '#000000';
+                scanlineColor = 'rgba(0,0,0,0.45)';
+                glitchChance = 0.25;   // Muito mais instável e espasmódico
+            } else {
+                // scifi
+                slides = [
+                    'QUANTUM OVERLAP\nSYSTEM ACTIVE',
+                    'MATRIX TRANSLATION\nCOORD: 45.908.12',
+                    'REALITY INTEGRITY\nFAILING DETECTED',
+                    'STATIC'
+                ];
+                textColor = '#11ff77'; // Verde fósforo
+                gradStart = '#001a0d';  // Fundo esverdeado terminal antigo
+                gradEnd = '#000000';
+                scanlineColor = 'rgba(0,0,0,0.25)';
+                glitchChance = 0.08;
+            }
 
             proj.timer++;
             if (proj.timer % 240 === 0) { // troca a cada ~4s a 60fps
@@ -2400,40 +2442,51 @@
             if (slide === 'STATIC') {
                 // Estática
                 const imgData = ctx.createImageData(256, 160);
+                const noiseMax = proj.type === 'terror' ? 40 : 80;
                 for (let i = 0; i < imgData.data.length; i += 4) {
-                    const v = Math.random() * 60;
-                    imgData.data[i] = v; imgData.data[i + 1] = v; imgData.data[i + 2] = v;
+                    const v = Math.random() * noiseMax;
+                    if (proj.type === 'terror') {
+                        // Estática vermelha/sombria
+                        imgData.data[i] = v * 1.5;
+                        imgData.data[i + 1] = v * 0.2;
+                        imgData.data[i + 2] = v * 0.2;
+                    } else {
+                        // Estática verde/digital
+                        imgData.data[i] = v * 0.2;
+                        imgData.data[i + 1] = v * 1.5;
+                        imgData.data[i + 2] = v * 0.4;
+                    }
                     imgData.data[i + 3] = 255;
                 }
                 ctx.putImageData(imgData, 0, 0);
             } else {
                 // Fundo gradiente
                 const grad = ctx.createLinearGradient(0, 0, 0, 160);
-                grad.addColorStop(0, '#0a1428');
-                grad.addColorStop(1, '#000000');
+                grad.addColorStop(0, gradStart);
+                grad.addColorStop(1, gradEnd);
                 ctx.fillStyle = grad;
                 ctx.fillRect(0, 0, 256, 160);
 
                 // Texto
-                ctx.fillStyle = '#88aaff';
-                ctx.font = 'bold 16px monospace';
+                ctx.fillStyle = textColor;
+                ctx.font = 'bold 13px monospace';
                 ctx.textAlign = 'center';
                 const lines = slide.split('\n');
                 lines.forEach((line, i) => {
-                    ctx.fillText(line, 128, 65 + i * 25);
+                    ctx.fillText(line, 128, 70 + i * 25);
                 });
 
                 // Scanlines
-                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                ctx.fillStyle = scanlineColor;
                 for (let y = 0; y < 160; y += 3) {
                     ctx.fillRect(0, y, 256, 1);
                 }
 
-                // Glitch aleatório (10% chance)
-                if (Math.random() < 0.1) {
+                // Glitch aleatório
+                if (Math.random() < glitchChance) {
                     const gy = Math.floor(Math.random() * 140);
                     const gh = 3 + Math.floor(Math.random() * 8);
-                    const gx = Math.floor(Math.random() * 20) - 10;
+                    const gx = Math.floor(Math.random() * (proj.type === 'terror' ? 30 : 16)) - (proj.type === 'terror' ? 15 : 8);
                     const strip = ctx.getImageData(0, gy, 256, gh);
                     ctx.putImageData(strip, gx, gy);
                 }
