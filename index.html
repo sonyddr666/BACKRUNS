@@ -347,51 +347,93 @@
             display: block;
         }
 
-        /* Hotbar de Spawn */
+        /* Hotbar de Spawn — estilo Minecraft */
         #hotbar-spawn {
             display: none;
             position: fixed;
-            bottom: 20px;
+            bottom: 12px;
             left: 50%;
             transform: translateX(-50%);
             z-index: 200;
-            background: rgba(12, 12, 10, 0.92);
-            border: 1px solid #544d21;
-            padding: 6px 10px;
-            border-radius: 4px;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+            background: rgba(8, 8, 6, 0.85);
+            border: 2px solid #3a3415;
+            padding: 4px;
+            border-radius: 3px;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.9);
         }
 
         #hotbar-spawn .hb-items {
             display: flex;
-            gap: 4px;
+            gap: 2px;
         }
 
         .hb-slot {
-            width: 48px;
-            height: 48px;
+            width: 52px;
+            height: 52px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            background: rgba(30, 28, 18, 0.9);
-            border: 1px solid #3a3415;
-            transition: all 0.15s;
-            font-size: 1.2rem;
+            background: rgba(30, 28, 18, 0.85);
+            border: 2px solid #2a2510;
+            transition: border-color 0.1s, background 0.1s;
+            font-size: 1.3rem;
             position: relative;
+            user-select: none;
         }
 
         .hb-slot:hover {
-            border-color: #d1c78b;
-            background: #2a2510;
-            box-shadow: 0 0 8px rgba(209, 199, 139, 0.3);
+            background: rgba(50, 46, 25, 0.9);
         }
 
-        .hb-slot span {
-            font-size: 0.45rem;
+        .hb-slot.selected {
+            border: 3px solid #d1c78b;
+            background: rgba(60, 55, 30, 0.95);
+            box-shadow: 0 0 12px rgba(209, 199, 139, 0.4), inset 0 0 8px rgba(209, 199, 139, 0.15);
+        }
+
+        .hb-slot .hb-num {
+            position: absolute;
+            top: 1px;
+            left: 3px;
+            font-size: 0.5rem;
             color: #8a8a5a;
-            margin-top: 2px;
+            font-weight: bold;
+            font-family: monospace;
+        }
+
+        .hb-slot.selected .hb-num {
+            color: #d1c78b;
+        }
+
+        .hb-slot span.hb-label {
+            font-size: 0.42rem;
+            color: #6a6a4a;
+            margin-top: 1px;
+            letter-spacing: -0.3px;
+        }
+
+        .hb-slot.selected span.hb-label {
+            color: #b0a860;
+        }
+
+        .hb-slot.hb-danger {
+            border-color: #552222;
+        }
+
+        .hb-slot.hb-danger.selected {
+            border-color: #ff4444;
+            box-shadow: 0 0 12px rgba(255, 50, 50, 0.4), inset 0 0 8px rgba(255, 50, 50, 0.1);
+        }
+
+        .hb-slot.hb-util {
+            border-color: #225522;
+        }
+
+        .hb-slot.hb-util.selected {
+            border-color: #66ff66;
+            box-shadow: 0 0 12px rgba(50, 255, 50, 0.3), inset 0 0 8px rgba(50, 255, 50, 0.1);
         }
 
         #painel-dev {
@@ -769,21 +811,24 @@
     <!-- HOTBAR DE SPAWN (estilo Minecraft) -->
     <div id="hotbar-spawn">
         <div class="hb-items">
-            <div class="hb-slot" onclick="hotbarSpawn('cadeira')" title="Cadeira">🪑<span>Cad</span></div>
-            <div class="hb-slot" onclick="hotbarSpawn('sofa')" title="Sofá">🛋️<span>Sofá</span></div>
-            <div class="hb-slot" onclick="hotbarSpawn('mesa')" title="Mesa">🗄️<span>Mesa</span></div>
-            <div class="hb-slot" onclick="hotbarSpawn('relogio')" title="Relógio">🕐<span>Relg</span></div>
-            <div class="hb-slot" onclick="hotbarSpawn('bebedouro')" title="Bebedouro">🚰<span>Beb</span></div>
-            <div class="hb-slot" onclick="hotbarSpawn('arquivo')" title="Armário">📦<span>Arq</span></div>
-            <div class="hb-slot" onclick="hotbarSpawn('quadro')" title="Quadro">🖼️<span>Quad</span></div>
-            <div class="hb-slot" onclick="hotbarSpawn('wire')" title="Spawn Wire" style="border-color:#ff4444;">
-                ⚡<span>Wire</span></div>
-            <div class="hb-slot" onclick="hotbarSpawn('observador')" title="Spawn Observador"
-                style="border-color:#ff4444;">👁<span>Obs</span></div>
-            <div class="hb-slot" onclick="hotbarSpawn('resetStress')" title="Reset Stress"
-                style="border-color:#66ff66;">💆<span>Str</span></div>
-            <div class="hb-slot" onclick="hotbarSpawn('resetCo2')" title="Reset CO2" style="border-color:#66ff66;">
-                🌬<span>CO2</span></div>
+            <div class="hb-slot selected" data-slot="0" data-tipo="cadeira" title="Cadeira">
+                <span class="hb-num">1</span>🪑<span class="hb-label">Cadeira</span></div>
+            <div class="hb-slot" data-slot="1" data-tipo="sofa" title="Sofá">
+                <span class="hb-num">2</span>🛋️<span class="hb-label">Sofá</span></div>
+            <div class="hb-slot" data-slot="2" data-tipo="mesa" title="Mesa">
+                <span class="hb-num">3</span>🗄️<span class="hb-label">Mesa</span></div>
+            <div class="hb-slot" data-slot="3" data-tipo="arquivo" title="Armário">
+                <span class="hb-num">4</span>📦<span class="hb-label">Arquivo</span></div>
+            <div class="hb-slot" data-slot="4" data-tipo="bebedouro" title="Bebedouro">
+                <span class="hb-num">5</span>🚰<span class="hb-label">Bebdro</span></div>
+            <div class="hb-slot" data-slot="5" data-tipo="quadro" title="Quadro">
+                <span class="hb-num">6</span>🖼️<span class="hb-label">Quadro</span></div>
+            <div class="hb-slot" data-slot="6" data-tipo="relogio" title="Relógio">
+                <span class="hb-num">7</span>🕐<span class="hb-label">Relógio</span></div>
+            <div class="hb-slot hb-danger" data-slot="7" data-tipo="wireFrente" title="Wire (na frente)">
+                <span class="hb-num">8</span>👹<span class="hb-label">Wire</span></div>
+            <div class="hb-slot hb-danger" data-slot="8" data-tipo="obsFrente" title="Observador (na frente)">
+                <span class="hb-num">9</span>👁<span class="hb-label">Obs</span></div>
         </div>
     </div>
 
@@ -2083,6 +2128,61 @@
             console.log(`[AURA] Wire spawnou em [${targetR},${targetC}] (Total: ${entidadesWire.length})`);
         }
 
+        // === SPAWN WIRE NA FRENTE DO JOGADOR (para testes no modo dev) ===
+        function spawnWireNaFrente(forceX, forceZ) {
+            if (!gridRef || !scene) return;
+            const cellSize = parseInt(document.getElementById('cellSize').value);
+            const cellXFn = (c) => c * cellSize - MAP_SIZE + cellSize / 2;
+            const cellZFn = (r) => r * cellSize - MAP_SIZE + cellSize / 2;
+
+            let spawnX, spawnZ;
+            if (forceX !== undefined && forceZ !== undefined) {
+                spawnX = forceX;
+                spawnZ = forceZ;
+            } else {
+                // Posição 5m à frente do jogador
+                const dir = new THREE.Vector3();
+                camera.getWorldDirection(dir);
+                spawnX = camera.position.x + dir.x * 5;
+                spawnZ = camera.position.z + dir.z * 5;
+            }
+
+            const spawnY = andarAtual === 0 ? 0 : FLOOR1_BASE;
+
+            // Converter pra grid
+            const targetC = Math.floor((spawnX + MAP_SIZE) / cellSize);
+            const targetR = Math.floor((spawnZ + MAP_SIZE) / cellSize);
+
+            if (targetR < 0 || targetR >= gridRows || targetC < 0 || targetC >= gridCols) return;
+
+            const group = criarWireVisual();
+            group.position.set(spawnX, spawnY, spawnZ);
+            scene.add(group);
+
+            const wSpeed = parseFloat(document.getElementById('wireSpeed') ? document.getElementById('wireSpeed').value : 1.0);
+            const newWire = {
+                group, gridR: targetR, gridC: targetC,
+                path: [], pathIdx: 0, active: true,
+                spd: wSpeed, spawnTimer: 0, despawnTimer: 0
+            };
+
+            if (audioListener && audioCtx && wireFiltRef) {
+                const wireSound = new THREE.PositionalAudio(audioListener);
+                const pGain = audioCtx.createGain();
+                pGain.gain.value = 0.0;
+                wireFiltRef.connect(pGain);
+                pGain.connect(wireSound);
+                wireSound.setRefDistance(3.0);
+                wireSound.setMaxDistance(30.0);
+                group.add(wireSound);
+                newWire.sound = wireSound;
+                newWire.gainNode = pGain;
+            }
+
+            entidadesWire.push(newWire);
+            console.log(`[DEV] Wire spawnou NA FRENTE em (${spawnX.toFixed(1)}, ${spawnZ.toFixed(1)}) [${targetR},${targetC}]`);
+        }
+
         function criarObservadorVisual() {
             const g = new THREE.Group();
 
@@ -2114,35 +2214,46 @@
             return g;
         }
 
-        function spawnObservador() {
+        function spawnObservador(forceX, forceZ) {
             if (!gridRef || !scene || (observador && observador.active)) return;
             const cellSize = parseInt(document.getElementById('cellSize').value);
             const cellX = (c) => c * cellSize - MAP_SIZE + cellSize / 2;
             const cellZ = (r) => r * cellSize - MAP_SIZE + cellSize / 2;
 
-            const pC = Math.floor((camera.position.x + MAP_SIZE) / cellSize);
-            const pR = Math.floor((camera.position.z + MAP_SIZE) / cellSize);
+            let ox, oz;
 
-            // Encontrar beco sem saída (≤ 1 conexão) a 4+ de distância
-            let candidates = [];
-            for (let r = 0; r < gridRows; r++) {
-                for (let c = 0; c < gridCols; c++) {
-                    const numConns = Object.keys(gridRef[r][c].conn).length;
-                    if (numConns <= 1 && Math.abs(r - pR) + Math.abs(c - pC) >= 4) {
-                        candidates.push([r, c]);
+            if (forceX !== undefined && forceZ !== undefined) {
+                // Spawn forçado na posição especificada (modo dev)
+                ox = forceX;
+                oz = forceZ;
+            } else {
+                const pC = Math.floor((camera.position.x + MAP_SIZE) / cellSize);
+                const pR = Math.floor((camera.position.z + MAP_SIZE) / cellSize);
+
+                // Encontrar beco sem saída (≤ 1 conexão) a 4+ de distância
+                let candidates = [];
+                for (let r = 0; r < gridRows; r++) {
+                    for (let c = 0; c < gridCols; c++) {
+                        const numConns = Object.keys(gridRef[r][c].conn).length;
+                        if (numConns <= 1 && Math.abs(r - pR) + Math.abs(c - pC) >= 4) {
+                            candidates.push([r, c]);
+                        }
                     }
                 }
-            }
-            if (candidates.length === 0) return;
+                if (candidates.length === 0) return;
 
-            const [tr, tc] = candidates[Math.floor(Math.random() * candidates.length)];
+                const [tr, tc] = candidates[Math.floor(Math.random() * candidates.length)];
+                ox = cellX(tc) - 2;
+                oz = cellZ(tr) - 2;
+            }
+
+            const spawnY = andarAtual === 0 ? 0 : FLOOR1_BASE;
+
             const group = criarObservadorVisual();
-            const ox = cellX(tc) - 2;
-            const oz = cellZ(tr) - 2;
-            group.position.set(ox, 0, oz);
+            group.position.set(ox, spawnY, oz);
 
             // Face player direction
-            group.lookAt(camera.position.x, 0, camera.position.z);
+            group.lookAt(camera.position.x, spawnY, camera.position.z);
 
             scene.add(group);
 
@@ -2150,7 +2261,7 @@
                 group, x: ox, z: oz, active: true,
                 tempoSemOlhar: 0, olhandoPara: false, spawnTimer: 0
             };
-            console.log(`[AURA] Observador spawnou em [${tr},${tc}]`);
+            console.log(`[AURA] Observador spawnou em (${ox.toFixed(1)}, ${oz.toFixed(1)})` + (forceX !== undefined ? ' [DEV FORÇADO]' : ''));
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -4387,54 +4498,205 @@
                 if (tabMap[tabId] !== undefined) tabs[tabMap[tabId]].classList.add('active');
             };
 
-            // === HOTBAR DE SPAWN (TAB) ===
+            // === HOTBAR ESTILO MINECRAFT ===
             let hotbarVisible = false;
+            let hotbarSlot = 0; // slot selecionado (0-8)
             const hotbar = document.getElementById('hotbar-spawn');
+            const hotbarSlots = hotbar.querySelectorAll('.hb-slot');
 
+            function selecionarSlot(idx) {
+                if (idx < 0 || idx >= hotbarSlots.length) return;
+                hotbarSlot = idx;
+                hotbarSlots.forEach((s, i) => {
+                    s.classList.toggle('selected', i === idx);
+                });
+            }
+
+            function spawnarSlotSelecionado(e) {
+                if (!hotbarVisible || hotbarSlot < 0 || hotbarSlot >= hotbarSlots.length) return;
+                const tipo = hotbarSlots[hotbarSlot].dataset.tipo;
+                if (tipo) hotbarSpawn(tipo, e);
+            }
+
+            // TAB = toggle hotbar
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Tab' && modoDevAtivo) {
                     e.preventDefault();
                     hotbarVisible = !hotbarVisible;
                     hotbar.style.display = hotbarVisible ? 'block' : 'none';
                 }
+
+                // Teclas 1-9 = selecionar slot (estilo Minecraft)
+                if (modoDevAtivo && hotbarVisible) {
+                    const num = parseInt(e.key);
+                    if (num >= 1 && num <= 9) {
+                        e.preventDefault();
+                        selecionarSlot(num - 1);
+                    }
+                }
             });
 
-            window.hotbarSpawn = function (tipo) {
-                // Posição 3m à frente do jogador
-                const dir = new THREE.Vector3();
-                camera.getWorldDirection(dir);
-                const spawnX = camera.position.x + dir.x * 3;
-                const spawnZ = camera.position.z + dir.z * 3;
+            // Scroll do mouse = mudar slot
+            document.addEventListener('wheel', (e) => {
+                if (!modoDevAtivo || !hotbarVisible) return;
+                e.preventDefault();
+                let next = hotbarSlot + (e.deltaY > 0 ? 1 : -1);
+                if (next < 0) next = hotbarSlots.length - 1;
+                if (next >= hotbarSlots.length) next = 0;
+                selecionarSlot(next);
+            }, { passive: false });
+
+            // Clique esquerdo = spawnar item selecionado
+            document.addEventListener('mousedown', (e) => {
+                if (!modoDevAtivo || !hotbarVisible) return;
+                if (e.button === 0) {
+                    // Evita spawnar se clicar no próprio menu/hotbar
+                    if (e.target.closest('#hotbar-spawn') || e.target.closest('#painel-dev')) {
+                        return;
+                    }
+                    if (controls.isLocked || e.target === renderer.domElement) {
+                        spawnarSlotSelecionado(e);
+                    }
+                }
+            });
+
+            // Clique nos slots também seleciona
+            hotbarSlots.forEach((slot, i) => {
+                slot.addEventListener('click', () => {
+                    selecionarSlot(i);
+                });
+            });
+
+            window.hotbarSpawn = function (tipo, e) {
+                const floorY = andarAtual === 0 ? 0 : FLOOR1_BASE;
+                let spawnX, spawnY, spawnZ;
+                let normal = new THREE.Vector3(0, 1, 0);
+                let hitWall = false;
+
+                const raycaster = new THREE.Raycaster();
+                const mouseCoords = new THREE.Vector2();
+
+                if (controls.isLocked || !e) {
+                    mouseCoords.set(0, 0);
+                } else {
+                    mouseCoords.x = (e.clientX / window.innerWidth) * 2 - 1;
+                    mouseCoords.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                }
+
+                raycaster.setFromCamera(mouseCoords, camera);
+
+                const intersects = raycaster.intersectObjects(scene.children, true);
+                let hit = null;
+                for (const intersect of intersects) {
+                    if (intersect.object.type === 'Light' || 
+                        intersect.object.type === 'AmbientLight' || 
+                        intersect.object.type === 'PointLight' ||
+                        intersect.object.name === 'cameraHelper') {
+                        continue;
+                    }
+                    hit = intersect;
+                    break;
+                }
+
+                if (hit) {
+                    spawnX = hit.point.x;
+                    spawnY = hit.point.y;
+                    spawnZ = hit.point.z;
+                    if (hit.face) {
+                        normal.copy(hit.face.normal);
+                        normal.transformDirection(hit.object.matrixWorld);
+                    }
+                    if (Math.abs(normal.y) < 0.5) {
+                        hitWall = true;
+                    }
+                } else {
+                    const dir = new THREE.Vector3();
+                    camera.getWorldDirection(dir);
+                    spawnX = camera.position.x + dir.x * 3;
+                    spawnZ = camera.position.z + dir.z * 3;
+                    spawnY = floorY;
+                }
 
                 let obj = null;
+                let angle = Math.random() * Math.PI * 2;
+
+                if ((tipo === 'relogio' || tipo === 'quadro') && hit && hitWall) {
+                    angle = Math.atan2(normal.x, normal.z);
+                    spawnX += normal.x * 0.02;
+                    spawnZ += normal.z * 0.02;
+                }
+
                 switch (tipo) {
                     case 'cadeira':
-                        obj = criarCadeira(spawnX, spawnZ, Math.random() * Math.PI * 2, 1);
+                        if (hitWall) {
+                            spawnX += normal.x * 0.45;
+                            spawnZ += normal.z * 0.45;
+                            spawnY = floorY;
+                        }
+                        obj = criarCadeira(spawnX, spawnZ, angle, 1);
+                        obj.position.y += spawnY;
                         break;
                     case 'sofa':
-                        obj = criarSofa(spawnX, spawnZ, Math.random() * Math.PI * 2);
+                        if (hitWall) {
+                            spawnX += normal.x * 0.65;
+                            spawnZ += normal.z * 0.65;
+                            spawnY = floorY;
+                        }
+                        obj = criarSofa(spawnX, spawnZ, angle);
+                        obj.position.y += spawnY;
                         break;
                     case 'mesa':
-                        obj = criarMesa(spawnX, spawnZ, Math.random() * Math.PI * 2);
+                        if (hitWall) {
+                            spawnX += normal.x * 0.75;
+                            spawnZ += normal.z * 0.75;
+                            spawnY = floorY;
+                        }
+                        obj = criarMesa(spawnX, spawnZ, angle);
+                        obj.position.y += spawnY;
                         break;
                     case 'relogio':
-                        obj = criarRelogio(spawnX, 2.5, spawnZ, Math.random() * Math.PI * 2);
+                        if (!hit || !hitWall) {
+                            spawnY = floorY + 2.5;
+                        }
+                        obj = criarRelogio(spawnX, spawnY, spawnZ, angle);
                         break;
                     case 'bebedouro':
+                        if (hitWall) {
+                            spawnX += normal.x * 0.45;
+                            spawnZ += normal.z * 0.45;
+                            spawnY = floorY;
+                        }
                         obj = criarBebedouro(spawnX, spawnZ);
+                        obj.position.y += spawnY;
                         break;
                     case 'arquivo':
+                        if (hitWall) {
+                            spawnX += normal.x * 0.45;
+                            spawnZ += normal.z * 0.45;
+                            spawnY = floorY;
+                        }
                         obj = criarArquivo(spawnX, spawnZ);
+                        obj.position.y += spawnY;
                         break;
                     case 'quadro':
-                        obj = criarQuadro(spawnX, 2.2, spawnZ, Math.random() * Math.PI * 2);
+                        if (!hit || !hitWall) {
+                            spawnY = floorY + 2.2;
+                        }
+                        obj = criarQuadro(spawnX, spawnY, spawnZ, angle);
                         break;
                     case 'wire':
                         spawnWire();
                         return;
+                    case 'wireFrente':
+                        spawnWireNaFrente(spawnX, spawnZ);
+                        return;
                     case 'observador':
                         if (observador && observador.active) { scene.remove(observador.group); observador = null; }
                         spawnObservador();
+                        return;
+                    case 'obsFrente':
+                        if (observador && observador.active) { scene.remove(observador.group); observador = null; }
+                        spawnObservador(spawnX, spawnZ);
                         return;
                     case 'resetStress':
                         stressLevel = 0; colapsoProgress = 0; colapsoForcado = false; tempoParado = 0;
@@ -4456,7 +4718,7 @@
                     const bbox = new THREE.Box3().setFromObject(obj);
                     wallBoxes.push({ box: bbox, x: spawnX, z: spawnZ });
                     moveisArray.push({ mesh: obj, box: bbox, tipo: tipo });
-                    console.log(`[HOTBAR] Spawned ${tipo} at (${spawnX.toFixed(1)}, ${spawnZ.toFixed(1)})`);
+                    console.log(`[HOTBAR] Spawned ${tipo} at (${spawnX.toFixed(1)}, ${spawnY.toFixed(1)}, ${spawnZ.toFixed(1)})`);
                 }
             };
 
