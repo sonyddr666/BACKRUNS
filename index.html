@@ -2419,9 +2419,11 @@
                 { geo: frameH, y: 3.1, x: 0 }, { geo: frameH, y: 0.9, x: 0 },
                 { geo: frameV, y: 2.0, x: -1.81 }, { geo: frameV, y: 2.0, x: 1.81 }
             ];
+            
+            const isParallelToX = Math.abs(Math.sin(rot)) < 0.5;
             for (const o of offsets) {
                 const f = new THREE.Mesh(o.geo, matMoldura);
-                f.position.set(x + (rot === 0 ? o.x : 0), o.y, z + (rot !== 0 ? o.x : 0));
+                f.position.set(x + (isParallelToX ? o.x : 0), o.y, z + (!isParallelToX ? o.x : 0));
                 f.rotation.y = rot;
                 scene.add(f);
                 objetosDinamicos.push(f);
@@ -2440,9 +2442,11 @@
                 lightIntensity = 0.5;
             }
 
-            // Luz colorida sutil
+            // Luz colorida sutil projetada na frente da tela
             const light = new THREE.PointLight(lightColor, lightIntensity, 5);
-            light.position.set(x, 2.0, z + (rot === 0 ? 1 : 0));
+            const lx = x + Math.sin(rot) * 0.8;
+            const lz = z + Math.cos(rot) * 0.8;
+            light.position.set(lx, 2.0, lz);
             scene.add(light);
             objetosDinamicos.push(light);
 
@@ -3323,7 +3327,7 @@
                         if (r === 0 || !grid[r][c].conn[(r - 1) + ',' + c]) {
                             ancors.push({
                                 x: cellX(c),
-                                z: edgeZ(r) + 0.05,
+                                z: edgeZ(r) + 0.64,
                                 rot: 0
                             });
                         }
@@ -3337,7 +3341,7 @@
                         if (r === rows - 1 || !grid[r][c].conn[(r + 1) + ',' + c]) {
                             ancors.push({
                                 x: cellX(c),
-                                z: edgeZ(r + 1) - 0.05,
+                                z: edgeZ(r + 1) - 0.64,
                                 rot: Math.PI
                             });
                         }
@@ -3350,7 +3354,7 @@
                     for (let r = rm.r; r < rm.r + rm.size; r++) {
                         if (c === 0 || !grid[r][c].conn[r + ',' + (c - 1)]) {
                             ancors.push({
-                                x: edgeX(c) + 0.05,
+                                x: edgeX(c) + 0.64,
                                 z: cellZ(r),
                                 rot: Math.PI / 2
                             });
@@ -3364,7 +3368,7 @@
                     for (let r = rm.r; r < rm.r + rm.size; r++) {
                         if (c === cols - 1 || !grid[r][c].conn[r + ',' + (c + 1)]) {
                             ancors.push({
-                                x: edgeX(c + 1) - 0.05,
+                                x: edgeX(c + 1) - 0.64,
                                 z: cellZ(r),
                                 rot: -Math.PI / 2
                             });
