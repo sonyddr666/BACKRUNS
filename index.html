@@ -976,6 +976,9 @@
         let projetores = [];       // {mesh, canvas, ctx, slideIdx, timer, light}
         let zonaDeFalha = [];      // meshes visuais das bordas
 
+        // Fumaça de Letras (efeito de spawn dev)
+        let particulasLetras = [];  // {sprite, vx, vy, vz, vida, vidaMax}
+
         // Alarme (2E)
         let faseAlarme = 'normal'; // 'normal' | 'amarelo' | 'vermelho'
         let deathActive = false;   // previne inputs durante death sequence
@@ -2759,6 +2762,111 @@
             scene.add(luzLeste); objetosDinamicos.push(luzLeste);
 
             console.log(`[AURA] Zonas de falha: ${zonaDeFalha.length} portas fantasma`);
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // SEÇÃO 3F — FUMAÇA DE LETRAS (EFEITO DE SPAWN DEV)
+        // ══════════════════════════════════════════════════════════════
+
+        const _fumacaGlifos = ['⛥', 'ψ', '☠', '☣', '҂', '█', '▓', '░', 'Ø', '§', '⚠', '∅', '⛧', '◌', '꠵', '𝀿', '🜏', 'Σ', 'Ω', 'λ', '∞', '†', '‡', '¿', '⁂'];
+
+        function _criarSpriteLetra(glifo) {
+            const cvs = document.createElement('canvas');
+            cvs.width = 64; cvs.height = 64;
+            const ctx = cvs.getContext('2d');
+            ctx.clearRect(0, 0, 64, 64);
+
+            // Cor aleatória entre verde-matrix, vermelho-terror e dourado-aura
+            const cores = ['#00ff66', '#ff3333', '#d1c78b', '#ff6600', '#cc00ff', '#00ffcc'];
+            ctx.fillStyle = cores[Math.floor(Math.random() * cores.length)];
+            ctx.font = 'bold 32px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = ctx.fillStyle;
+            ctx.shadowBlur = 8;
+            ctx.fillText(glifo, 32, 32);
+
+            const tex = new THREE.CanvasTexture(cvs);
+            const mat = new THREE.SpriteMaterial({
+                map: tex,
+                transparent: true,
+                opacity: 1.0,
+                depthTest: false,
+                blending: THREE.AdditiveBlending
+            });
+            const sprite = new THREE.Sprite(mat);
+            sprite.scale.set(0.35, 0.35, 1);
+            return sprite;
+        }
+
+        function spawnFumacaDeLetras(x, y, z) {
+            if (!scene) return;
+            const numParticulas = 12 + Math.floor(Math.random() * 8); // 12-20 letras
+
+            for (let i = 0; i < numParticulas; i++) {
+                const glifo = _fumacaGlifos[Math.floor(Math.random() * _fumacaGlifos.length)];
+                const sprite = _criarSpriteLetra(glifo);
+
+                // Posição inicial com dispersão leve
+                sprite.position.set(
+                    x + (Math.random() - 0.5) * 1.2,
+                    y + Math.random() * 0.5,
+                    z + (Math.random() - 0.5) * 1.2
+                );
+
+                // Escala inicial aleatória
+                const baseScale = 0.2 + Math.random() * 0.3;
+                sprite.scale.set(baseScale, baseScale, 1);
+
+                scene.add(sprite);
+
+                particulasLetras.push({
+                    sprite: sprite,
+                    vx: (Math.random() - 0.5) * 1.5,   // drift horizontal
+                    vy: 0.8 + Math.random() * 1.2,      // sobe
+                    vz: (Math.random() - 0.5) * 1.5,   // drift horizontal
+                    rotSpeed: (Math.random() - 0.5) * 3, // rotação Z
+                    vida: 0,
+                    vidaMax: 1.5 + Math.random() * 1.0,  // 1.5-2.5s
+                    baseScale: baseScale
+                });
+            }
+        }
+
+        function atualizarFumacaDeLetras(delta) {
+            for (let i = particulasLetras.length - 1; i >= 0; i--) {
+                const p = particulasLetras[i];
+                p.vida += delta;
+
+                const progresso = p.vida / p.vidaMax; // 0→1
+
+                // Movimento: sobe + drifta + desacelera
+                const desacel = 1.0 - progresso * 0.6;
+                p.sprite.position.x += p.vx * delta * desacel;
+                p.sprite.position.y += p.vy * delta * desacel;
+                p.sprite.position.z += p.vz * delta * desacel;
+
+                // Rotação
+                p.sprite.material.rotation += p.rotSpeed * delta;
+
+                // Escala: cresce rápido no início, encolhe no final
+                const scaleMult = progresso < 0.2
+                    ? progresso / 0.2                    // 0→1 nos primeiros 20%
+                    : 1.0 - ((progresso - 0.2) / 0.8);  // 1→0 nos restantes 80%
+                const s = p.baseScale * Math.max(0.05, scaleMult);
+                p.sprite.scale.set(s, s, 1);
+
+                // Opacidade: fade out
+                p.sprite.material.opacity = Math.max(0, 1.0 - progresso);
+
+                // Morreu
+                if (p.vida >= p.vidaMax) {
+                    scene.remove(p.sprite);
+                    p.sprite.material.map.dispose();
+                    p.sprite.material.dispose();
+                    particulasLetras.splice(i, 1);
+                }
+            }
         }
 
         // ══════════════════════════════════════════════════════════════
@@ -5209,17 +5317,21 @@
                         break;
                     case 'wire':
                         spawnWire();
+                        spawnFumacaDeLetras(spawnX, spawnY || 0, spawnZ);
                         return;
                     case 'wireFrente':
                         spawnWireNaFrente(spawnX, spawnZ);
+                        spawnFumacaDeLetras(spawnX, spawnY || 0, spawnZ);
                         return;
                     case 'observador':
                         if (observador && observador.active) { scene.remove(observador.group); observador = null; }
                         spawnObservador();
+                        spawnFumacaDeLetras(spawnX, spawnY || 0, spawnZ);
                         return;
                     case 'obsFrente':
                         if (observador && observador.active) { scene.remove(observador.group); observador = null; }
                         spawnObservador(spawnX, spawnZ);
+                        spawnFumacaDeLetras(spawnX, spawnY || 0, spawnZ);
                         return;
                     case 'resetStress':
                         stressLevel = 0; colapsoProgress = 0; colapsoForcado = false; tempoParado = 0;
@@ -5241,6 +5353,8 @@
                     const bbox = new THREE.Box3().setFromObject(obj);
                     wallBoxes.push({ box: bbox, x: spawnX, z: spawnZ });
                     moveisArray.push({ mesh: obj, box: bbox, tipo: tipo });
+                    // === FUMAÇA DE LETRAS NO SPAWN ===
+                    spawnFumacaDeLetras(spawnX, spawnY, spawnZ);
                     console.log(`[HOTBAR] Spawned ${tipo} at (${spawnX.toFixed(1)}, ${spawnY.toFixed(1)}, ${spawnZ.toFixed(1)})`);
                 }
             };
@@ -6365,6 +6479,11 @@
                     monFor.innerText = colapsoForcado ? 'MORTE CERTA' : 'NÃO';
                     monFor.style.color = colapsoForcado ? '#ff2222' : '#66ff66';
                 }
+            }
+
+            // === ATUALIZAR FUMAÇA DE LETRAS ===
+            if (particulasLetras.length > 0) {
+                atualizarFumacaDeLetras(delta);
             }
 
             prevTime = time;
