@@ -4568,14 +4568,12 @@
                     wallBoxes.push({ box: boxR, x: sx + 1.2, z: globalZ });
                 }
 
-                // Colisor sob a escada (bloqueia o espaço inferior até onde a rampa atinge a altura de 2.2m)
-                // O meio da escada (Z = sz) está na altura de FLOOR1_BASE/2 = 2.07m.
-                // Bloquearemos da traseira superior (sz - 3.5) até sz + 0.5.
+                // Colisor sob a escada (apenas a metade traseira onde a altura é muito baixa para passar)
                 const boxSob = new THREE.Box3(
                     new THREE.Vector3(sx - 1.1, 0, sz - 3.6),
-                    new THREE.Vector3(sx + 1.1, 2.2, sz + 0.5)
+                    new THREE.Vector3(sx + 1.1, 1.2, sz - 1.0)
                 );
-                wallBoxes.push({ box: boxSob, x: sx, z: sz - 1.5 });
+                wallBoxes.push({ box: boxSob, x: sx, z: sz - 2.3 });
             }
 
             // === GERAR TETO DO ANDAR 0 E CHÃO DO ANDAR 1 (SEM FUROS — estilo noclip Backrooms) ===
@@ -5536,6 +5534,10 @@
                     if (Math.abs(normal.y) < 0.5) {
                         hitWall = true;
                     }
+                    // Se acertou o teto (normal pra baixo), forçar pro chão
+                    if (normal.y < -0.5) {
+                        spawnY = floorY;
+                    }
                 } else {
                     const dir = new THREE.Vector3();
                     camera.getWorldDirection(dir);
@@ -6487,8 +6489,8 @@
                     smoothFrequency(wireOsc.frequency, 80);
                 }
                 if (closestWireCellDist < 2) {
-                    document.getElementById('vhs-overlay').style.opacity = '0.4';
-                    stressLevel += 0.3 * delta;
+                    document.getElementById('vhs-overlay').style.opacity = '0.25';
+                    stressLevel += 0.08 * delta;
                 }
 
                 // Wire spawn timer (baseado nos sliders do painel dev)
