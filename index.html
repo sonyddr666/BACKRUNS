@@ -192,7 +192,7 @@
             background-size: 100% 3px, 3px 100%;
             pointer-events: none;
             z-index: 5;
-            opacity: 0.6;
+            opacity: 0.15;
             transition: opacity 0.3s;
         }
 
@@ -793,7 +793,7 @@
                 </div>
                 <div class="dev-group">
                     <label>VHS <span id="v-vhs">0.6</span></label>
-                    <input type="range" id="vhsSlider" min="0" max="1" step="0.1" value="0.6"
+                    <input type="range" id="vhsSlider" min="0" max="1" step="0.1" value="0.15"
                         oninput="document.getElementById('v-vhs').innerText=this.value">
                 </div>
             </div>
@@ -1526,7 +1526,7 @@
                 gn.gain.value = 0.03;
 
                 src.connect(filter).connect(gn);
-                gn.connect(sound);
+                gn.connect(sound.getInput ? sound.getInput() : audioCtx.destination);
                 src.start();
 
                 setTimeout(tick, 1000);
@@ -2603,7 +2603,7 @@
             if (attempts >= 100) return;
 
             // Verificar alcançabilidade
-            const testPath = bfsPath(gridRef, gridRows, gridCols, targetR, targetC, pR, pC);
+            const testPath = aStarPath(gridRef, gridRows, gridCols, targetR, targetC, pR, pC);
             if (testPath.length === 0) return;
 
             const spawnY = andarAtual === 0 ? 0 : FLOOR1_BASE;
@@ -2630,7 +2630,7 @@
 
                 wireFiltRef.connect(occFilter);
                 occFilter.connect(pGain);
-                pGain.connect(wireSound);
+                pGain.connect(wireSound.getInput ? wireSound.getInput() : audioCtx.destination);
 
                 wireSound.setRefDistance(3.0);
                 wireSound.setMaxDistance(30.0);
@@ -6487,7 +6487,7 @@
                     smoothFrequency(wireOsc.frequency, 80);
                 }
                 if (closestWireCellDist < 2) {
-                    document.getElementById('vhs-overlay').style.opacity = '1';
+                    document.getElementById('vhs-overlay').style.opacity = '0.4';
                     stressLevel += 0.3 * delta;
                 }
 
@@ -6660,10 +6660,10 @@
                 // Tier 2 (0.6+): Neblina engole, VHS intensifica
                 if (efeitoTotal > 0.6) {
                     if (faseAlarme !== 'vermelho') {
-                        scene.fog.density = 0.018 + (efeitoTotal - 0.6) * 0.04;
+                        scene.fog.density = 0.018 + (efeitoTotal - 0.6) * 0.02;
                     }
                     document.getElementById('vhs-overlay').style.opacity =
-                        String(0.6 + efeitoTotal * 0.4);
+                        String(Math.min(0.45, 0.15 + efeitoTotal * 0.3));
                 }
 
                 // FOV baseado no colapso (clamp mínimo 20°, nunca inverte)
@@ -6672,7 +6672,7 @@
                     camera.updateProjectionMatrix();
                     // Blackouts aleatórios
                     if (colapsoProgress > 0.5 && Math.random() > 0.92) {
-                        document.getElementById('noclip-overlay').style.opacity = String(0.3 + colapsoProgress * 0.5);
+                        document.getElementById('noclip-overlay').style.opacity = String(0.15 + colapsoProgress * 0.25);
                         setTimeout(() => {
                             if (!colapsoForcado || colapsoProgress < 1.0)
                                 document.getElementById('noclip-overlay').style.opacity = '0';
